@@ -20,7 +20,7 @@ import Common.Conduit.Api                        (Api)
 
 import Common.Conduit.Api.Articles.Article       (Article)
 import Common.Conduit.Api.Articles.Articles      (Articles)
-import Common.Conduit.Api.Articles.Attributes    (CreateArticle)
+import Common.Conduit.Api.Articles.Attributes    (CreateArticle, UpdateArticle)
 import Common.Conduit.Api.Articles.Comment       (Comment)
 import Common.Conduit.Api.Articles.CreateComment (CreateComment)
 import Common.Conduit.Api.Namespace              (Namespace)
@@ -97,7 +97,18 @@ data ArticlesClient f t m = ArticlesClient
     -> Dynamic t (f (QParam Integer))
     -> Event t ()
     -> m (Event t (f (ReqResult () Articles)))
+  , _articlesDelete
+    :: Dynamic t (f (Maybe Token))
+    ->  f (Dynamic t (Either Text Text))
+    -> Event t ()
+    -> m (Event t (f (ReqResult () NoContent)))
   , _articlesArticle :: Dynamic t (f (Maybe Token)) -> f (Dynamic t (Either Text Text)) -> ArticleClient f t m
+  , _articlesUpdate
+    :: Dynamic t (f (Maybe Token))
+    -> f (Dynamic t (Either Text Text))
+    -> Dynamic t (f (Either Text (Namespace "article" UpdateArticle)))
+    -> Event t ()
+    -> m (Event t (f (ReqResult () (Namespace "article" Article))))
   }
 makeLenses ''ArticlesClient
 
@@ -145,7 +156,7 @@ getClient = mkClient (pure $ BasePath "/") -- This would be much better if there
             _userCurrent :<|> _userUpdate = apiUserC
         _apiArticles = ArticlesClient { .. }
           where
-            _articlesList :<|> _articlesCreate :<|> _articlesFeed :<|> articleC = apiArticlesC
+            _articlesList :<|> _articlesCreate :<|> _articlesFeed :<|> _articlesDelete :<|> _articlesUpdate :<|> articleC = apiArticlesC
             _articlesArticle auth slug = ArticleClient { .. }
               where
                 _articleGet  :<|> _articleComments :<|> _articleCommentCreate :<|> _articleCommentDelete = articleC auth slug

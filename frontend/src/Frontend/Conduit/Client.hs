@@ -18,7 +18,7 @@ import Servant.Reflex.Multi    (ReqResult (ResponseFailure), reqSuccess)
 
 import           Common.Conduit.Api.Articles.Article       (Article)
 import           Common.Conduit.Api.Articles.Articles      (Articles)
-import           Common.Conduit.Api.Articles.Attributes    (CreateArticle)
+import           Common.Conduit.Api.Articles.Attributes    (CreateArticle, UpdateArticle)
 import           Common.Conduit.Api.Articles.Comment       (Comment)
 import           Common.Conduit.Api.Articles.CreateComment (CreateComment)
 import           Common.Conduit.Api.Errors                 (ErrorBody)
@@ -149,8 +149,26 @@ createArticle tokenDyn createDyn submitE = fmap switchClientRes $ prerender (pur
   resE <- unIdF $ getClient ^. apiArticles . articlesCreate . fillIdF tokenDyn . fillIdF createDyn . fill submitE
   wireClientRes submitE resE
 
--- TODO Update Article
--- TODO Delete Article
+updateArticle
+  :: (Reflex t, Applicative m, Prerender js t m)
+  => Dynamic t (Maybe Token)
+  -> Dynamic t (Either Text Text)
+  -> Dynamic t (Either Text (Namespace "article" UpdateArticle))
+  -> Event t ()
+  -> m (ClientRes t (Namespace "article" Article))
+updateArticle tokenDyn slugDyn updateDyn submitE = fmap switchClientRes $ prerender (pure emptyClientRes) $ do
+  resE <- unIdF $ getClient ^. apiArticles . articlesUpdate . fillIdF tokenDyn . fillId slugDyn . fillIdF updateDyn . fill submitE
+  wireClientRes submitE resE
+
+deleteArticle
+  :: (Reflex t, Applicative m, Prerender js t m)
+  => Dynamic t (Maybe Token)
+  -> Dynamic t (Either Text Text)
+  -> Event t ()
+  -> m (ClientRes t NoContent )
+deleteArticle tokenDyn slugDyn submitE = fmap switchClientRes $ prerender (pure emptyClientRes) $ do
+  resE <- unIdF $ getClient ^. apiArticles . articlesDelete . fillIdF tokenDyn . fillId slugDyn . fill submitE
+  wireClientRes submitE resE
 
 createComment
   :: (Reflex t, Applicative m, Prerender js t m)

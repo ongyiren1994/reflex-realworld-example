@@ -41,6 +41,15 @@ type ArticlesApi token =
   :> QueryParam "limit" Integer
   :> QueryParam "offset" Integer
   :> Get '[JSON] Articles
+  ) :<|> (
+    Auth '[JWT] token
+  :> Capture "slug" Text
+  :> DeleteNoContent '[JSON] NoContent
+  ) :<|> (
+    Auth '[JWT] token
+  :> Capture "slug" Text
+  :> ReqBody '[JSON] (Namespace "article" UpdateArticle)
+  :> Put '[JSON] (Namespace "article" Article)
   )
   :<|> ArticleApi token
 

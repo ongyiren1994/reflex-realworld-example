@@ -21,7 +21,7 @@ import           GHCJS.DOM.Document     (createElement)
 import           GHCJS.DOM.Element      (setInnerHTML)
 import           GHCJS.DOM.Types        (liftJSM)
 import qualified Lucid                  as L
-import           Obelisk.Route.Frontend (pattern (:/), R, RouteToUrl, Routed, SetRoute, askRoute, routeLink)
+import           Obelisk.Route.Frontend (pattern (:/), R, RouteToUrl, Routed, SetRoute, askRoute, routeLink, setRoute)
 import qualified Text.MMark             as MMark
 
 
@@ -74,8 +74,9 @@ article = elClass "div" "article-page" $ do
   elClass "div" "container page" $ do
     articleContent articleDyn
     el "hr" blank
-    elClass "div" "row article-actions" $
-      void $ dyn $ maybe blank articleMeta <$> articleDyn
+    -- Removed for better looks
+    -- elClass "div" "row article-actions" $
+    --   void $ dyn $ maybe blank articleMeta <$> articleDyn
     elClass "div" "row" $
       elClass "div" "col-xs-12 col-md-8 offset-md-2" $ do
         -- Do the comments UI below
@@ -87,7 +88,11 @@ articleMeta
      , SetRoute t (R FrontendRoute) m
      , PostBuild t m
      , MonadHold t m
+     , HasLoggedInAccount s
+     , HasFrontendState t s m
      , Prerender js t m
+     , MonadHold t m
+     , MonadFix m
      )
   => Article.Article
   -> m ()
@@ -100,7 +105,8 @@ articleMeta art = elClass "div" "article-meta" $ do
     elClass "span" "date" $ text (showText $ Article.createdAt art)
   actions profile
   where
-    actions profile = do
+    actions profile = mdo
+      accountDyn <- reviewFrontendState loggedInAccount
       -- TODO : Do something with this click
       _ <- buttonClass "btn btn-sm btn-outline-secondary action-btn" (constDyn False) $ do
         elClass "i" "ion-plus-round" blank
@@ -117,7 +123,44 @@ articleMeta art = elClass "div" "article-meta" $ do
         text " Favourite Post ("
         elClass "span" "counter" $ text $ showText (Article.favoritesCount art)
         text ")"
+      -- Can be done better here?
+      editEE <- dyn $
+        liftA2
+          (\p -> maybe (pure never) editButton
+            . mfilter ((Profile.username p ==). Account.username)
+          ) (constDyn profile) accountDyn
+      switchHold never editEE
+      deleteEE <- dyn $
+        liftA2
+          (\p -> maybe (pure never) deleteButton
+            . mfilter ((Profile.username p ==). Account.username)
+          ) (constDyn profile) accountDyn
+      switchHold never deleteEE
       pure ()
+      where
+        editButton _ = do
+            editClickE <- elClass "button" "btn btn-outline-primary btn-sm pull-xs-right" $ do
+              (editElt ,_) <- elClass' "i" "ion-edit" blank
+              pure $ domEvent Click editElt
+            setRoute $
+              (\_ ->
+                FrontendRoute_Editor :/ Just (DocumentSlug $ Article.slug art)
+              ) <$> editClickE
+            pure (void editClickE)
+        deleteButton account = do
+            deleteClickE <- elClass "button" "btn btn-outline-primary btn-sm pull-xs-right" $ do
+              (trashElt,_) <- elClass' "i" "ion-trash-a" blank
+              pure $ domEvent Click trashElt
+            (deleteSuccessE,_,_) <- Client.deleteArticle
+              (constDyn . Just . Account.token $ account)
+              (Right . Article.slug <$> constDyn art)
+              deleteClickE
+            setRoute $
+              (\_ ->
+                FrontendRoute_Profile :/ (Username $ Account.username account, Nothing)
+              ) <$> deleteSuccessE
+            pure (void deleteSuccessE)
+
 
 articleContent
   :: forall t m js

@@ -98,7 +98,7 @@ userServer = currentUserServer :<|> updateUserServer
       userToAccount newUser
 
 articlesServer :: Server (ArticlesApi Claim) ConduitServerContext ConduitServerM
-articlesServer = listArticlesServer :<|> createArticleServer :<|> feedServer :<|> articleServer
+articlesServer = listArticlesServer :<|> createArticleServer :<|> feedServer :<|> deleteArticleServer :<|> updateArticleServer :<|> articleServer
   where
     listArticlesServer authRes limit offset tags authors favorited = runConduitErrorsT $ do
       runDatabase $ do
@@ -126,6 +126,25 @@ articlesServer = listArticlesServer :<|> createArticleServer :<|> feedServer :<|
         currUser   <- loadAuthorizedUser authRes
         validAttrs <- withExceptT failedValidation $ DBArticles.validateAttributesForInsert attrCreate
         liftQuery $ Namespace <$> DBArticles.create (primaryKey currUser) validAttrs
+
+    deleteArticleServer authRes slug = runConduitErrorsT $ do
+      runDatabase $ do
+            currUser    <- loadAuthorizedUser authRes
+            articleMay  <- liftQuery $ DBArticles.find (Just $ primaryKey currUser) slug
+            article     <- articleMay ?? notFound ("Article("<> (pack $ show slug) <>")")
+            when (ApiProfile.username (ApiArticle.author article) /= DBUser.username currUser) $
+              throwError forbidden
+            liftQuery $ DBArticles.destroy (DBArticle.ArticleId (ApiArticle.id article))
+            pure NoContent
+
+    updateArticleServer authRes slug (Namespace update) = runConduitErrorsT $ do
+      runDatabase $ do
+        currUser    <- loadAuthorizedUser authRes
+        articleMay  <- liftQuery $ DBArticles.find (Just $ primaryKey currUser) slug
+        article     <- articleMay ?? notFound ("Article("<> (pack $ show slug) <>")")
+        validUpdate <- withExceptT failedValidation $ DBArticles.validateAttributesForUpdate article update
+        liftQuery $ Namespace <$> DBArticles.update (primaryKey currUser) slug validUpdate
+
 
     articleServer authRes slug = getArticleServer :<|> commentsServer
       where
