@@ -18,6 +18,10 @@ import           Common.Route                         (FrontendRoute (..))
 import qualified Frontend.Conduit.Client              as Client
 import           Frontend.FrontendStateT
 import           Frontend.Utils                       (buttonClass)
+import Data.Foldable as Fold
+import Data.Text
+import Control.Applicative (liftA2)
+
 
 login
   :: ( DomBuilder t m
@@ -64,8 +68,11 @@ login = noUserWidget $ elClass "div" "auth-page" $ do
                 , ("placeholder","Password")
                 , ("type","password")
                 ])
+          let isEmailEmptyDyn = fmap ((== "") . strip) (emailI ^. to _inputElement_value)
+              isPassEmptyDyn = fmap ((== "") . strip) (passI ^. to _inputElement_value)
+              isValidDyn = Fold.foldr1 (liftA2 (||)) [isEmailEmptyDyn, isPassEmptyDyn]
           -- And a submit button. Not really a submit element. Should fix this
-          submitE <- buttonClass "btn btn-lg btn-primary pull-xs-right" submittingDyn $ text "Sign in"
+          submitE <- buttonClass "btn btn-lg btn-primary pull-xs-right" isValidDyn $ text "Sign in"
 
           -- We take the Dynamics from the two inputs and make a Dynamic t Credentials
           -- Dynamic has an applicative instance.
@@ -74,7 +81,7 @@ login = noUserWidget $ elClass "div" "auth-page" $ do
                 <*> passI ^. to _inputElement_value
 
           -- Do a backend call with the Dynamic t Credentials and the Submit Click
-          (successE,errorE,submittingDyn) <- Client.login (pure . Namespace <$> credentials) submitE
+          (successE,errorE,_) <- Client.login (pure . Namespace <$> credentials) submitE
 
           pure (submitE, successE, errorE)
 

@@ -139,7 +139,7 @@ articleMeta art = elClass "div" "article-meta" $ do
       pure ()
       where
         editButton _ = do
-            editClickE <- elClass "button" "btn btn-outline-primary btn-sm pull-xs-right" $ do
+            editClickE <- elClass "button" "btn btn-outline-primary btn-sm" $ do
               (editElt ,_) <- elClass' "i" "ion-edit" blank
               pure $ domEvent Click editElt
             setRoute $
@@ -148,7 +148,7 @@ articleMeta art = elClass "div" "article-meta" $ do
               ) <$> editClickE
             pure (void editClickE)
         deleteButton account = do
-            deleteClickE <- elClass "button" "btn btn-outline-primary btn-sm pull-xs-right" $ do
+            deleteClickE <- elClass "button" "btn btn-outline-primary btn-sm" $ do
               (trashElt,_) <- elClass' "i" "ion-trash-a" blank
               pure $ domEvent Click trashElt
             (deleteSuccessE,_,_) <- Client.deleteArticle
@@ -273,6 +273,7 @@ comments slugDyn = mdo
         let createCommentDyn = Right . Namespace <$> CreateComment.CreateComment
               <$> commentI ^. to _textAreaElement_value
         postE <- elClass "div" "card-footer" $ do
+          --  Comment nothing shall be allowed
           buttonClass "btn btn-sm btn-primary" (constDyn False) $ text "Post Comment"
         (submitSuccessE,_,_) <- Client.createComment
           (constDyn . Just $ token)

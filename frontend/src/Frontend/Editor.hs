@@ -19,6 +19,9 @@ import           Frontend.FrontendStateT
 import           Frontend.Utils                         (buttonClass)
 import           Control.Monad.Fix      (MonadFix)
 import           Data.Functor           (void)
+import Data.Text
+import Control.Applicative (liftA2)
+import Data.Foldable as Fold
 
 editor
   :: forall t m js s
@@ -74,7 +77,11 @@ editorNone acct = do
         ,("placeholder","Write your article (in markdown)")
         ,("rows","8")
         ])
-  publishE <- buttonClass "btn btn-lg btn-primary pull-xs-right" (constDyn False) $ text "Publish Article"
+  let isTitleEmptyDyn :: Dynamic t Bool = fmap ((== "") . strip) (titleI ^. to _inputElement_value)
+      isDescEmptyDyn :: Dynamic t Bool = fmap ((== "") . strip) (descI ^. to _inputElement_value)
+      isBodyEmptyDyn :: Dynamic t Bool = fmap ((== "") . strip) (bodyI ^. to _textAreaElement_value)
+      isValidDyn = Fold.foldr1 (liftA2 (||)) [isBodyEmptyDyn, isDescEmptyDyn, isTitleEmptyDyn]
+  publishE <- buttonClass "btn btn-lg btn-primary pull-xs-right" isValidDyn $ text "Publish Article"
   let createArticle :: Dynamic t CreateArticle = ArticleAttributes
         <$> titleI ^. to _inputElement_value
         <*> descI  ^. to _inputElement_value
@@ -128,7 +135,11 @@ editorJust acct slug = do
         ,("rows","8")
         ])
       & textAreaElementConfig_setValue .~ ( Article.body <$> loadSlugE)
-  publishE <- buttonClass "btn btn-lg btn-primary pull-xs-right" (constDyn False) $ text "Update Article"
+  let isTitleEmptyDyn :: Dynamic t Bool = fmap ((== "") . strip) (titleI ^. to _inputElement_value)
+      isDescEmptyDyn :: Dynamic t Bool = fmap ((== "") . strip) (descI ^. to _inputElement_value)
+      isBodyEmptyDyn :: Dynamic t Bool = fmap ((== "") . strip) (bodyI ^. to _textAreaElement_value)
+      isValidDyn = Fold.foldr1 (liftA2 (||)) [isBodyEmptyDyn, isDescEmptyDyn, isTitleEmptyDyn]
+  publishE <- buttonClass "btn btn-lg btn-primary pull-xs-right" isValidDyn $ text "Update Article"
   let updateArticle :: Dynamic t UpdateArticle = ArticleAttributes
         <$> (Just <$> titleI ^. to _inputElement_value)
         <*> (Just <$> descI  ^. to _inputElement_value)

@@ -20,6 +20,9 @@ import           Common.Route                    (FrontendRoute (..), Username (
 import qualified Frontend.Conduit.Client         as Client
 import           Frontend.FrontendStateT
 import           Frontend.Utils                  (buttonClass)
+import Data.Foldable as Fold
+import Data.Text
+import Control.Applicative (liftA2)
 
 settings
   :: ( DomBuilder t m
@@ -86,7 +89,14 @@ settings = userWidget $ \acct -> elClass "div" "settings-page" $ do
                   ,("placeholder","Password")
                   ,("type","password")
                   ]
-            updateE <- buttonClass "btn btn-lg btn-primary pull-xs-right" (constDyn False) $ text "Update Settings"
+            -- Why cannot add type signature here?
+            let isUrlEmptyDyn = fmap ((== "") . strip) (urlI ^. to _inputElement_value)
+                isUsernameEmptyDyn = fmap ((== "") . strip) (usernameI ^. to _inputElement_value)
+                isBioEmptyDyn = fmap ((== "") . strip) (bioI ^. to _textAreaElement_value)
+                isEmailEmptyDyn = fmap ((== "") . strip) (emailI ^. to _inputElement_value)
+                isPasswordEmptyDyn = fmap ((== "") . strip) (passwordI ^. to _inputElement_value)
+                isValidDyn = Fold.foldr1 (liftA2 (||)) [isUrlEmptyDyn, isUsernameEmptyDyn, isBioEmptyDyn, isEmailEmptyDyn, isPasswordEmptyDyn]
+            updateE <- buttonClass "btn btn-lg btn-primary pull-xs-right" isValidDyn $ text "Update Settings"
             -- Here we dont want to update the password if it was left blank
             let updateDyn = UpdateUser
                   <$> (mfilter (not . Text.null) . Just <$> passwordI ^. to _inputElement_value)

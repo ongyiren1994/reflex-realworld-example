@@ -15,7 +15,9 @@ import           Common.Route                        (FrontendRoute (..))
 import qualified Frontend.Conduit.Client             as Client
 import           Frontend.FrontendStateT
 import           Frontend.Utils                      (buttonClass)
-
+import Data.Foldable as Fold
+import Data.Text
+import Control.Applicative (liftA2)
 
 register
   :: ( DomBuilder t m
@@ -58,7 +60,11 @@ register = noUserWidget $ elClass "div" "auth-page" $ do
                 , ("placeholder","Password")
                 , ("type","password")
                 ]
-          submitE <- buttonClass "btn btn-lg btn-primary pull-xs-right" (constDyn False) $ text "Sign Up"
+          let isUsernameEmptyDyn = fmap ((== "") . strip) (usernameI ^. to _inputElement_value)
+              isEmailEmptyDyn = fmap ((== "") . strip) (emailI ^. to _inputElement_value)
+              isPassEmptyDyn = fmap ((== "") . strip) (passI ^. to _inputElement_value)
+              isValidDyn = Fold.foldr1 (liftA2 (||)) [isUsernameEmptyDyn, isEmailEmptyDyn, isPassEmptyDyn]
+          submitE <- buttonClass "btn btn-lg btn-primary pull-xs-right" isValidDyn $ text "Sign Up"
           let registrant = Registrant
                 <$> usernameI ^. to _inputElement_value
                 <*> emailI ^. to _inputElement_value
