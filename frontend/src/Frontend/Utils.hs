@@ -134,3 +134,13 @@ routeLinkDynAttr attrDyn rDyn m = do
   (e, a) <- element "a" cfg m
   setRoute $ current rDyn <@ domEvent Click e
   return a
+
+disabledFormDyn
+  :: forall t m a
+  . (DomBuilder t m, PostBuild t m)
+  => Map.Map AttributeName Text
+  -> Dynamic t Bool
+  -> m (Event t (Map.Map AttributeName (Maybe Text)))
+disabledFormDyn attrs disabledDyn = do
+  let attrsDyn = fmap (\x -> if x then Map.insert "disable" "" attrs else attrs) disabledDyn
+  dynamicAttributesToModifyAttributes attrsDyn

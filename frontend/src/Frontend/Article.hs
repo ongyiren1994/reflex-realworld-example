@@ -37,7 +37,7 @@ import           Frontend.ArticlePreview                   (profileImage, profil
 import qualified Frontend.Conduit.Client                   as Client
 import           Frontend.FrontendStateT
 import           Frontend.Utils                            (buttonClass, routeLinkClass, routeLinkDynClass,
-                                                            showText)
+                                                            showText, disabledFormDyn)
 import Reflex.Dom (Prerender)
 
 article
@@ -263,19 +263,18 @@ comments slugDyn = mdo
       -- an event when they are successfully added.
       elClass "form" "card comment-form" $ mdo
         commentI <- elClass "div" "card-block" $ do
+          let attrs = Map.fromList [("class","form-control"),("placeholder","Write a comment"),("rows","3")]
+          modifyI <- disabledFormDyn attrs submittingDyn
           textAreaElement $ def
-              & textAreaElementConfig_elementConfig.elementConfig_initialAttributes .~ Map.fromList
-                [("class","form-control")
-                ,("placeholder","Write a comment")
-                ,("rows","3")
-                ]
+              & textAreaElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
               & textAreaElementConfig_setValue .~ ("" <$ submitSuccessE)
+              & textAreaElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
         let createCommentDyn = Right . Namespace <$> CreateComment.CreateComment
               <$> commentI ^. to _textAreaElement_value
         postE <- elClass "div" "card-footer" $ do
           --  Comment nothing shall be allowed
           buttonClass "btn btn-sm btn-primary" (constDyn False) $ text "Post Comment"
-        (submitSuccessE,_,_) <- Client.createComment
+        (submitSuccessE, _, submittingDyn) <- Client.createComment
           (constDyn . Just $ token)
           (Right . unDocumentSlug <$> slugDyn)
           createCommentDyn postE

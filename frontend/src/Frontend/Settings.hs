@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, LambdaCase, MultiParamTypeClasses, OverloadedStrings, PatternSynonyms #-}
-{-# LANGUAGE ScopedTypeVariables, TypeApplications                                                   #-}
+{-# LANGUAGE ScopedTypeVariables, TypeApplications, RecursiveDo                                                 #-}
 
 module Frontend.Settings where
 
@@ -19,10 +19,11 @@ import           Common.Conduit.Api.User.Update  (UpdateUser (UpdateUser))
 import           Common.Route                    (FrontendRoute (..), Username (..))
 import qualified Frontend.Conduit.Client         as Client
 import           Frontend.FrontendStateT
-import           Frontend.Utils                  (buttonClass)
+import           Frontend.Utils                  (buttonClass, disabledFormDyn)
 import Data.Foldable as Fold
 import Data.Text
 import Control.Applicative (liftA2)
+import           Control.Monad.Fix      (MonadFix)
 
 settings
   :: ( DomBuilder t m
@@ -33,6 +34,7 @@ settings
      , AsFrontendEvent e
      , HasFrontendState t s m
      , HasLoggedInAccount s
+     , MonadFix m
      )
   => m ()
 -- First we should look at userWidget !
@@ -49,46 +51,42 @@ settings = userWidget $ \acct -> elClass "div" "settings-page" $ do
           (loadSuccessE,_,_) <- Client.getCurrentUser tokenDyn pbE
           let loadAccountE = unNamespace <$> loadSuccessE
 
-          el "fieldset" $ do
-            urlI <- elClass "fieldset" "form-group" $
+          el "fieldset" $ mdo
+            urlI <- elClass "fieldset" "form-group" $ do
+              let attrs = Map.fromList [("class","form-control") ,("placeholder","URL of profile picture")]
+              modifyI <- disabledFormDyn attrs submittingDyn
               inputElement $ def
-                & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ Map.fromList
-                  [("class","form-control")
-                  ,("placeholder","URL of profile picture")
-                  ]
+                & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
                 -- Note that we set the form val from AJAX returned data
                 & inputElementConfig_setValue .~ (fromMaybe "" . Account.image <$> loadAccountE)
-            usernameI <- elClass "fieldset" "form-group" $
+                & inputElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
+            usernameI <- elClass "fieldset" "form-group" $ do
+              let attrs = Map.fromList [("class","form-control"),("placeholder","Your name")]
+              modifyI <- disabledFormDyn attrs submittingDyn
               inputElement $ def
-                & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ Map.fromList
-                  [("class","form-control")
-                  ,("placeholder","Your name")
-                  ]
+                & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
                 & inputElementConfig_setValue .~ (Account.username <$> loadAccountE)
-            bioI <- elClass "fieldset" "form-group" $
+                & inputElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
+            bioI <- elClass "fieldset" "form-group" $ do
+              let attrs = Map.fromList [("class","form-control"),("placeholder","Short bio about you"),("rows","8")]
+              modifyI <- disabledFormDyn attrs submittingDyn
               textAreaElement $ def
-                & textAreaElementConfig_elementConfig.elementConfig_initialAttributes .~ Map.fromList
-                  [("class","form-control")
-                  ,("placeholder","Short bio about you")
-                  ,("rows","8")
-                  ]
+                & textAreaElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
                 & textAreaElementConfig_setValue .~ (Account.bio <$> loadAccountE)
-
-            emailI <- elClass "fieldset" "form-group" $
+                & textAreaElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
+            emailI <- elClass "fieldset" "form-group" $ do
+              let attrs = Map.fromList [("class","form-control"),("placeholder","Email"),("type","input")]
+              modifyI <- disabledFormDyn attrs submittingDyn
               inputElement $ def
-                & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ Map.fromList
-                  [("class","form-control")
-                  ,("placeholder","Email")
-                  ,("type","input")
-                  ]
+                & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
                 & inputElementConfig_setValue .~ (Account.email <$> loadAccountE)
-            passwordI <- elClass "fieldset" "form-group" $
+                & inputElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
+            passwordI <- elClass "fieldset" "form-group" $ do
+              let attrs = Map.fromList [("class","form-control"),("placeholder","Password"),("type","password")]
+              modifyI <- disabledFormDyn attrs submittingDyn
               inputElement $ def
-                & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ Map.fromList
-                  [("class","form-control")
-                  ,("placeholder","Password")
-                  ,("type","password")
-                  ]
+                & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
+                & inputElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
             -- Why cannot add type signature here?
             let isUrlEmptyDyn = fmap ((== "") . strip) (urlI ^. to _inputElement_value)
                 isUsernameEmptyDyn = fmap ((== "") . strip) (usernameI ^. to _inputElement_value)
@@ -107,7 +105,7 @@ settings = userWidget $ \acct -> elClass "div" "settings-page" $ do
 
             -- Make the backend call when the submit button is clicked
             -- and we have a valid UpdateUser
-            (updateSuccessE,_,_) <- Client.updateCurrentUser tokenDyn (pure . Namespace <$> updateDyn) updateE
+            (updateSuccessE, _, submittingDyn) <- Client.updateCurrentUser tokenDyn (pure . Namespace <$> updateDyn) updateE
 
             -- Once we have updated successfully, we redirect to the profile page.
             setRoute $
