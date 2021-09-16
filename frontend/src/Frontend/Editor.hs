@@ -22,6 +22,11 @@ import           Data.Functor           (void)
 import Data.Text
 import Control.Applicative (liftA2)
 import Data.Foldable as Fold
+import           GHCJS.DOM.Document     (createElement)
+import           GHCJS.DOM.Element      (setInnerHTML)
+import           GHCJS.DOM.Types        (liftJSM)
+import           Data.Maybe             (fromMaybe)
+import Frontend.Article (markDownToHtml5)
 
 editor
   :: forall t m js s
@@ -76,6 +81,7 @@ editorNone acct = mdo
     textAreaElement $ def
       & textAreaElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
       & textAreaElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
+  bodyPreview (bodyI ^. to _textAreaElement_value)
   let isTitleEmptyDyn :: Dynamic t Bool = fmap ((== "") . strip) (titleI ^. to _inputElement_value)
       isDescEmptyDyn :: Dynamic t Bool = fmap ((== "") . strip) (descI ^. to _inputElement_value)
       isBodyEmptyDyn :: Dynamic t Bool = fmap ((== "") . strip) (bodyI ^. to _textAreaElement_value)
@@ -136,6 +142,7 @@ editorJust acct slug = mdo
       & textAreaElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
       & textAreaElementConfig_setValue .~ ( Article.body <$> loadSlugE)
       & textAreaElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
+  bodyPreview (bodyI ^. to _textAreaElement_value)
   let isTitleEmptyDyn :: Dynamic t Bool = fmap ((== "") . strip) (titleI ^. to _inputElement_value)
       isDescEmptyDyn :: Dynamic t Bool = fmap ((== "") . strip) (descI ^. to _inputElement_value)
       isBodyEmptyDyn :: Dynamic t Bool = fmap ((== "") . strip) (bodyI ^. to _textAreaElement_value)
@@ -157,3 +164,24 @@ editorJust acct slug = mdo
     . unNamespace
     <$> successE
   pure ()
+
+bodyPreview
+  :: forall t m js
+  .  ( DomBuilder t m
+     , Prerender js t m
+     )
+  => Dynamic t Text
+  -> m ()
+bodyPreview articleBody = prerender_ (text "Please type something...") $ do
+  let htmlDyn = (fromMaybe "" . fmap (markDownToHtml5) <$> (Just <$> articleBody))
+  -- UI to be improved
+  elClass "h4" "" $ text "Preview"
+  elClass "fieldset" "from-group" $ do
+    d <- askDocument
+    htmlT <- sample . current $ htmlDyn
+    e <- liftJSM $ do
+      e <- createElement d ("div" :: String)
+      setInnerHTML e htmlT
+      pure e
+    performEvent_ $ (liftJSM . setInnerHTML e) <$> updated htmlDyn
+    placeRawElement e
