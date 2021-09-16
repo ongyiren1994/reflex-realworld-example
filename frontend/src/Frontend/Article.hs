@@ -37,7 +37,7 @@ import           Frontend.ArticlePreview                   (profileImage, profil
 import qualified Frontend.Conduit.Client                   as Client
 import           Frontend.FrontendStateT
 import           Frontend.Utils                            (buttonClass, routeLinkClass, routeLinkDynClass,
-                                                            showText, disabledFormDyn)
+                                                            showText, modifyFormAttrs)
 import Reflex.Dom (Prerender)
 
 article
@@ -264,7 +264,7 @@ comments slugDyn = mdo
       elClass "form" "card comment-form" $ mdo
         commentI <- elClass "div" "card-block" $ do
           let attrs = Map.fromList [("class","form-control"),("placeholder","Write a comment"),("rows","3")]
-          modifyI <- disabledFormDyn attrs submittingDyn
+          modifyI <- modifyFormAttrs attrs submittingDyn (constDyn False)
           textAreaElement $ def
               & textAreaElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
               & textAreaElementConfig_setValue .~ ("" <$ submitSuccessE)

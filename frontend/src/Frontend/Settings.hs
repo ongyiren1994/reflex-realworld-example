@@ -19,7 +19,7 @@ import           Common.Conduit.Api.User.Update  (UpdateUser (UpdateUser))
 import           Common.Route                    (FrontendRoute (..), Username (..))
 import qualified Frontend.Conduit.Client         as Client
 import           Frontend.FrontendStateT
-import           Frontend.Utils                  (buttonClass, disabledFormDyn)
+import           Frontend.Utils                  (buttonClass, modifyFormAttrs)
 import Data.Foldable as Fold
 import Data.Text
 import Control.Applicative (liftA2)
@@ -54,7 +54,7 @@ settings = userWidget $ \acct -> elClass "div" "settings-page" $ do
           el "fieldset" $ mdo
             urlI <- elClass "fieldset" "form-group" $ do
               let attrs = Map.fromList [("class","form-control") ,("placeholder","URL of profile picture")]
-              modifyI <- disabledFormDyn attrs submittingDyn
+              modifyI <- modifyFormAttrs attrs submittingDyn isUrlEmptyDyn
               inputElement $ def
                 & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
                 -- Note that we set the form val from AJAX returned data
@@ -62,28 +62,28 @@ settings = userWidget $ \acct -> elClass "div" "settings-page" $ do
                 & inputElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
             usernameI <- elClass "fieldset" "form-group" $ do
               let attrs = Map.fromList [("class","form-control"),("placeholder","Your name")]
-              modifyI <- disabledFormDyn attrs submittingDyn
+              modifyI <- modifyFormAttrs attrs submittingDyn isUsernameEmptyDyn
               inputElement $ def
                 & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
                 & inputElementConfig_setValue .~ (Account.username <$> loadAccountE)
                 & inputElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
             bioI <- elClass "fieldset" "form-group" $ do
               let attrs = Map.fromList [("class","form-control"),("placeholder","Short bio about you"),("rows","8")]
-              modifyI <- disabledFormDyn attrs submittingDyn
+              modifyI <- modifyFormAttrs attrs submittingDyn isBioEmptyDyn
               textAreaElement $ def
                 & textAreaElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
                 & textAreaElementConfig_setValue .~ (Account.bio <$> loadAccountE)
                 & textAreaElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
             emailI <- elClass "fieldset" "form-group" $ do
               let attrs = Map.fromList [("class","form-control"),("placeholder","Email"),("type","input")]
-              modifyI <- disabledFormDyn attrs submittingDyn
+              modifyI <- modifyFormAttrs attrs submittingDyn isEmailEmptyDyn
               inputElement $ def
                 & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
                 & inputElementConfig_setValue .~ (Account.email <$> loadAccountE)
                 & inputElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
             passwordI <- elClass "fieldset" "form-group" $ do
               let attrs = Map.fromList [("class","form-control"),("placeholder","Password"),("type","password")]
-              modifyI <- disabledFormDyn attrs submittingDyn
+              modifyI <- modifyFormAttrs attrs submittingDyn isPasswordEmptyDyn
               inputElement $ def
                 & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
                 & inputElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI

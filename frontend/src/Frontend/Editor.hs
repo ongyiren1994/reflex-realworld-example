@@ -16,7 +16,7 @@ import qualified Common.Conduit.Api.User.Account        as Account
 import           Common.Route                           (DocumentSlug (..), FrontendRoute (..))
 import qualified Frontend.Conduit.Client                as Client
 import           Frontend.FrontendStateT
-import           Frontend.Utils                         (buttonClass, disabledFormDyn)
+import           Frontend.Utils                         (buttonClass, modifyFormAttrs)
 import           Control.Monad.Fix      (MonadFix)
 import           Data.Functor           (void)
 import Data.Text
@@ -65,19 +65,19 @@ editorNone :: forall t m js s
 editorNone acct = mdo
   titleI <- elClass "fieldset" "form-group" $ do
     let attrs = Map.fromList [("class","form-control"),("placeholder","Article Title")]
-    modifyI <- disabledFormDyn attrs submittingDyn
+    modifyI <- modifyFormAttrs attrs submittingDyn isTitleEmptyDyn
     inputElement $ def
       & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
       & inputElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
   descI <- elClass "fieldset" "form-group" $ do
     let attrs = Map.fromList [("class","form-control"),("placeholder","What's this article about?")]
-    modifyI <- disabledFormDyn attrs submittingDyn
+    modifyI <- modifyFormAttrs attrs submittingDyn isDescEmptyDyn
     inputElement $ def
       & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
       & inputElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
   bodyI <- elClass "fieldset" "form-group" $ do
     let attrs = Map.fromList [("class","form-control") ,("placeholder","Write your article (in markdown)") ,("rows","8")]
-    modifyI <- disabledFormDyn attrs submittingDyn
+    modifyI <- modifyFormAttrs attrs submittingDyn isBodyEmptyDyn
     textAreaElement $ def
       & textAreaElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
       & textAreaElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
@@ -123,21 +123,21 @@ editorJust acct slug = mdo
   let loadSlugE = unNamespace <$> loadSuccessE
   titleI <- elClass "fieldset" "form-group" $ do
     let attrs = Map.fromList [("class","form-control")]
-    modifyI <- disabledFormDyn attrs submittingDyn
+    modifyI <- modifyFormAttrs attrs submittingDyn isTitleEmptyDyn
     inputElement $ def
       & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
       & inputElementConfig_setValue .~ ( Article.title <$> loadSlugE)
       & inputElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
   descI <- elClass "fieldset" "form-group" $ do
     let attrs = Map.fromList [("class","form-control")]
-    modifyI <- disabledFormDyn attrs submittingDyn
+    modifyI <- modifyFormAttrs attrs submittingDyn isDescEmptyDyn
     inputElement $ def
       & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
       & inputElementConfig_setValue .~ ( Article.description  <$> loadSlugE)
       & inputElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
   bodyI <- elClass "fieldset" "form-group" $ do
     let attrs = Map.fromList [("class","form-control") ,("rows","8")]
-    modifyI <- disabledFormDyn attrs submittingDyn
+    modifyI <- modifyFormAttrs attrs submittingDyn isBodyEmptyDyn
     textAreaElement $ def
       & textAreaElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
       & textAreaElementConfig_setValue .~ ( Article.body <$> loadSlugE)

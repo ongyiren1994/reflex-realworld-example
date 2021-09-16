@@ -135,12 +135,20 @@ routeLinkDynAttr attrDyn rDyn m = do
   setRoute $ current rDyn <@ domEvent Click e
   return a
 
-disabledFormDyn
+-- Shall use dom event Blur in the future
+modifyFormAttrs
   :: forall t m a
   . (DomBuilder t m, PostBuild t m)
   => Map.Map AttributeName Text
   -> Dynamic t Bool
+  -> Dynamic t Bool
   -> m (Event t (Map.Map AttributeName (Maybe Text)))
-disabledFormDyn attrs disabledDyn = do
-  let attrsDyn = fmap (\x -> if x then Map.insert "disable" "" attrs else attrs) disabledDyn
+modifyFormAttrs attrs disabledDyn isEmptyDyn = do
+  let attrsDyn = fmap addAttrs $ zipDyn disabledDyn isEmptyDyn
   dynamicAttributesToModifyAttributes attrsDyn
+  where
+    addAttrs (True, True)   = Map.insert "style" "border-color: red" $ Map.insert "disabled" "" attrs
+    addAttrs (True, False)  = Map.insert "disabled" "" attrs
+    addAttrs (False, True)  = Map.insert "style" "border-color: red" attrs
+    addAttrs (False, False) = attrs
+
