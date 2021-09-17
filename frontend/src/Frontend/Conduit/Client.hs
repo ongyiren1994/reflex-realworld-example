@@ -219,7 +219,33 @@ deleteComment tokenDyn slugDyn commentIdDyn submitE =
       . fill submitE
     wireClientRes submitE resE
 
--- TODO Favorite / Unfavorite
+favorite
+  :: (Reflex t, Applicative m, Prerender js t m)
+  => Dynamic t (Maybe Token)
+  -> Dynamic t (Either Text Text)
+  -> Event t ()
+  -> m (ClientRes t NoContent)
+favorite tokenDyn slugDyn submitE =
+  fmap switchClientRes $ prerender (pure emptyClientRes) $ do
+    resE <- unIdF $ getClient ^. apiArticles . articlesFavorite
+      . fillIdF tokenDyn
+      . fillId slugDyn
+      . fill submitE
+    wireClientRes submitE resE
+
+unFavorite
+  :: (Reflex t, Applicative m, Prerender js t m)
+  => Dynamic t (Maybe Token)
+  -> Dynamic t (Either Text Text)
+  -> Event t ()
+  -> m (ClientRes t NoContent)
+unFavorite tokenDyn slugDyn submitE =
+  fmap switchClientRes $ prerender (pure emptyClientRes) $ do
+    resE <- unIdF $ getClient ^. apiArticles . articlesUnfavorite
+      . fillIdF tokenDyn
+      . fillId slugDyn
+      . fill submitE
+    wireClientRes submitE resE
 
 allTags
   :: (Reflex t, Applicative m, Prerender js t m)

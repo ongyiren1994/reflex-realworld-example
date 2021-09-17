@@ -39,6 +39,7 @@ import           Frontend.FrontendStateT
 import           Frontend.Utils                            (buttonClass, routeLinkClass, routeLinkDynClass,
                                                             showText, modifyFormAttrs)
 import Reflex.Dom (Prerender)
+import qualified Frontend.Conduit.Client as Client
 
 article
   :: forall t m js s
@@ -118,11 +119,19 @@ articleMeta art = elClass "div" "article-meta" $ do
         text ")"
       -- TODO : Do something with this click
       text " "
-      _ <- buttonClass "btn btn-sm btn-outline-primary action-btn" (constDyn False) $ do
+      toFavI <- buttonClass "btn btn-sm btn-outline-primary action-btn" (constDyn False) $ do
+        elClass "i" "ion-thumbsup" blank
+      toUnfavI <- buttonClass "btn btn-sm btn-outline-primary action-btn" (constDyn False) $ do
+        elClass "i" "ion-thumbsdown" blank
+      elClass "span" "counter" $ do
+        countI <- foldDyn ($) (Article.favoritesCount art :: Integer) $ leftmost [(+ 1) <$ favI, (+ (-1)) <$ unFavI]
         elClass "i" "ion-heart" blank
-        text " Favourite Post ("
-        elClass "span" "counter" $ text $ showText (Article.favoritesCount art)
-        text ")"
+        text "     "
+        -- This one shan't be allowed to go negative?
+        elClass "span" "counter" $ display countI
+        text "     "
+      (favI ,_ ,_) <- Client.favorite ((fmap . fmap) Account.token accountDyn) (Right . Article.slug <$> constDyn art) toFavI
+      (unFavI ,_ ,_) <- Client.unFavorite ((fmap . fmap) Account.token accountDyn) (Right . Article.slug <$> constDyn art) toUnfavI
       -- Can be done better here?
       editEE <- dyn $
         liftA2

@@ -98,7 +98,7 @@ userServer = currentUserServer :<|> updateUserServer
       userToAccount newUser
 
 articlesServer :: Server (ArticlesApi Claim) ConduitServerContext ConduitServerM
-articlesServer = listArticlesServer :<|> createArticleServer :<|> feedServer :<|> deleteArticleServer :<|> updateArticleServer :<|> articleServer
+articlesServer = listArticlesServer :<|> createArticleServer :<|> feedServer :<|> deleteArticleServer :<|> updateArticleServer :<|> favoriteArticleServer :<|> unFavoriteArticleServer :<|> articleServer
   where
     listArticlesServer authRes limit offset tags authors favorited = runConduitErrorsT $ do
       runDatabase $ do
@@ -145,6 +145,25 @@ articlesServer = listArticlesServer :<|> createArticleServer :<|> feedServer :<|
         validUpdate <- withExceptT failedValidation $ DBArticles.validateAttributesForUpdate article update
         liftQuery $ Namespace <$> DBArticles.update (primaryKey currUser) slug validUpdate
 
+    favoriteArticleServer authRes slug  = runConduitErrorsT $ do
+      runDatabase $ do
+        currUser    <- loadAuthorizedUser authRes
+        articleMay  <- liftQuery $ DBArticles.find (Just $ primaryKey currUser) slug
+        article     <- articleMay ?? notFound ("Article("<> (pack $ show slug) <>")")
+        when (ApiProfile.username (ApiArticle.author article) /= DBUser.username currUser) $
+          throwError forbidden
+        liftQuery $ DBArticles.favorite (DBArticle.ArticleId (ApiArticle.id article)) (primaryKey currUser)
+        pure NoContent
+
+    unFavoriteArticleServer authRes slug  = runConduitErrorsT $ do
+      runDatabase $ do
+        currUser    <- loadAuthorizedUser authRes
+        articleMay  <- liftQuery $ DBArticles.find (Just $ primaryKey currUser) slug
+        article     <- articleMay ?? notFound ("Article("<> (pack $ show slug) <>")")
+        when (ApiProfile.username (ApiArticle.author article) /= DBUser.username currUser) $
+          throwError forbidden
+        liftQuery $ DBArticles.unfavorite (DBArticle.ArticleId (ApiArticle.id article)) (primaryKey currUser)
+        pure NoContent
 
     articleServer authRes slug = getArticleServer :<|> commentsServer
       where

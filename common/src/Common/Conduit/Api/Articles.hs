@@ -50,6 +50,16 @@ type ArticlesApi token =
   :> Capture "slug" Text
   :> ReqBody '[JSON] (Namespace "article" UpdateArticle)
   :> Put '[JSON] (Namespace "article" Article)
+  ) :<|> (
+    Auth '[JWT] token
+  :> "favorite"
+  :> Capture "slug" Text
+  :> GetNoContent '[JSON] NoContent
+  ) :<|> (
+    Auth '[JWT] token
+  :> "unfavorite"
+  :> Capture "slug" Text
+  :> GetNoContent '[JSON] NoContent
   )
   :<|> ArticleApi token
 
