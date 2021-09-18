@@ -17,7 +17,7 @@ import           Common.Conduit.Api.Users.Credentials (Credentials (Credentials)
 import           Common.Route                         (FrontendRoute (..))
 import qualified Frontend.Conduit.Client              as Client
 import           Frontend.FrontendStateT
-import           Frontend.Utils                       (buttonClass)
+import           Frontend.Utils                       (buttonClass, modifyFormAttrs, inputDynClass)
 import Data.Foldable as Fold
 import Data.Text
 import Control.Applicative (liftA2)
@@ -55,21 +55,18 @@ login = noUserWidget $ elClass "div" "auth-page" $ do
 
         -- A form for two inputs
         (submitE, successE, errorE) <- el "form" $ mdo
-          emailI <- elClass "fieldset" "form-group" $
-            inputElement $ def
-              & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ (Map.fromList
-                [ ("class","form-control form-control-lg")
-                , ("placeholder","Email")
-                ])
-          passI <- elClass "fieldset" "form-group" $
-            inputElement $ def
-              & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ (Map.fromList
-                [ ("class","form-control form-control-lg")
-                , ("placeholder","Password")
-                , ("type","password")
-                ])
-          let isEmailEmptyDyn = fmap ((== "") . strip) (emailI ^. to _inputElement_value)
-              isPassEmptyDyn = fmap ((== "") . strip) (passI ^. to _inputElement_value)
+          (emailBlurE, emailI) <- elClass "fieldset" "form-group" $ do
+            let attrs = Map.fromList [ ("class","form-control form-control-lg") , ("placeholder","Email")]
+            modifyE <- modifyFormAttrs attrs submittingDyn isEmailEmptyDyn
+            inputDynClass attrs modifyE
+          (passBlurE, passI) <- elClass "fieldset" "form-group" $ do
+            let attrs = Map.fromList [("class","form-control form-control-lg"), ("placeholder","Password") , ("type","password")]
+            modifyE <- modifyFormAttrs attrs submittingDyn isPassEmptyDyn
+            inputDynClass attrs modifyE
+          isEmailBlurDyn <- holdDyn False (True <$ emailBlurE)
+          isPassBlurDyn <- holdDyn False (True <$ passBlurE)
+          let isEmailEmptyDyn  = Fold.foldr1 (liftA2 (&&)) [fmap ((== "") . strip) (emailI ^. to _inputElement_value), isEmailBlurDyn]
+              isPassEmptyDyn  = Fold.foldr1 (liftA2 (&&)) [fmap ((== "") . strip) (passI ^. to _inputElement_value), isPassBlurDyn]
               isValidDyn = Fold.foldr1 (liftA2 (||)) [isEmailEmptyDyn, isPassEmptyDyn]
           -- And a submit button. Not really a submit element. Should fix this
           submitE <- buttonClass "btn btn-lg btn-primary pull-xs-right" isValidDyn $ text "Sign in"
@@ -81,7 +78,7 @@ login = noUserWidget $ elClass "div" "auth-page" $ do
                 <*> passI ^. to _inputElement_value
 
           -- Do a backend call with the Dynamic t Credentials and the Submit Click
-          (successE,errorE,_) <- Client.login (pure . Namespace <$> credentials) submitE
+          (successE, errorE, submittingDyn) <- Client.login (pure . Namespace <$> credentials) submitE
 
           pure (submitE, successE, errorE)
 

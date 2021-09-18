@@ -273,11 +273,11 @@ comments slugDyn = mdo
       elClass "form" "card comment-form" $ mdo
         commentI <- elClass "div" "card-block" $ do
           let attrs = Map.fromList [("class","form-control"),("placeholder","Write a comment"),("rows","3")]
-          modifyI <- modifyFormAttrs attrs submittingDyn (constDyn False)
+          modifyE <- modifyFormAttrs attrs submittingDyn (constDyn False)
           textAreaElement $ def
               & textAreaElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
               & textAreaElementConfig_setValue .~ ("" <$ submitSuccessE)
-              & textAreaElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
+              & textAreaElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyE
         let createCommentDyn = Right . Namespace <$> CreateComment.CreateComment
               <$> commentI ^. to _textAreaElement_value
         postE <- elClass "div" "card-footer" $ do

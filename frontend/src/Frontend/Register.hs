@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, LambdaCase, MultiParamTypeClasses, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE FlexibleContexts, LambdaCase, MultiParamTypeClasses, OverloadedStrings, PatternSynonyms, RecursiveDo #-}
 module Frontend.Register where
 
 import Control.Lens
@@ -14,10 +14,12 @@ import           Common.Conduit.Api.Users.Registrant (Registrant (Registrant))
 import           Common.Route                        (FrontendRoute (..))
 import qualified Frontend.Conduit.Client             as Client
 import           Frontend.FrontendStateT
-import           Frontend.Utils                      (buttonClass)
-import Data.Foldable as Fold
+import           Frontend.Utils                      (buttonClass, modifyFormAttrs, inputDynClass)
+import Data.Foldable as Fold ( Foldable(foldr1) )
 import Data.Text
 import Control.Applicative (liftA2)
+import Reflex.Dom (EventTag(SubmitTag))
+import           Control.Monad.Fix      (MonadFix)
 
 register
   :: ( DomBuilder t m
@@ -29,6 +31,8 @@ register
      , AsFrontendEvent e
      , HasFrontendState t s m
      , HasLoggedInAccount s
+     , MonadHold t m
+     , MonadFix m
      )
   => m ()
 register = noUserWidget $ elClass "div" "auth-page" $ do
@@ -40,36 +44,32 @@ register = noUserWidget $ elClass "div" "auth-page" $ do
           routeLink (FrontendRoute_Login :/ ()) $ text "Have an account?"
         elClass "ul" "error-messages" $
           blank
-        el "form" $ do
-          usernameI <- elClass "fieldset" "form-group" $
-            inputElement $ def
-              & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ Map.fromList
-                [ ("class","form-control form-control-lg")
-                , ("placeholder","Your name")
-                ]
-          emailI <- elClass "fieldset" "form-group" $
-            inputElement $ def
-              & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ Map.fromList
-                [ ("class","form-control form-control-lg")
-                , ("placeholder","Email")
-                ]
-          passI <- elClass "fieldset" "form-group" $
-            inputElement $ def
-              & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ Map.fromList
-                [ ("class","form-control form-control-lg")
-                , ("placeholder","Password")
-                , ("type","password")
-                ]
-          let isUsernameEmptyDyn = fmap ((== "") . strip) (usernameI ^. to _inputElement_value)
-              isEmailEmptyDyn = fmap ((== "") . strip) (emailI ^. to _inputElement_value)
-              isPassEmptyDyn = fmap ((== "") . strip) (passI ^. to _inputElement_value)
-              isValidDyn = Fold.foldr1 (liftA2 (||)) [isUsernameEmptyDyn, isEmailEmptyDyn, isPassEmptyDyn]
+        el "form" $ mdo
+          (usernameBlurE, usernameI) <- elClass "fieldset" "form-group" $ do
+            let attrs = Map.fromList [ ("class","form-control form-control-lg") ,("placeholder","Your name")]
+            modifyE <- modifyFormAttrs attrs submittingDyn isUsernameEmptyDyn
+            inputDynClass attrs modifyE
+          (emailBlurE, emailI) <- elClass "fieldset" "form-group" $ do
+            let attrs = Map.fromList [ ("class","form-control form-control-lg"), ("placeholder","Email")]
+            modifyE <- modifyFormAttrs attrs submittingDyn isEmailEmptyDyn
+            inputDynClass attrs modifyE
+          (passBlurE, passI) <- elClass "fieldset" "form-group" $ do
+            let attrs = Map.fromList [ ("class","form-control form-control-lg"), ("placeholder","Password"), ("type","password")]
+            modifyE <- modifyFormAttrs attrs submittingDyn isPassEmptyDyn
+            inputDynClass attrs modifyE
+          isEmailBlurDyn <- holdDyn False (True <$ emailBlurE)
+          isPassBlurDyn <- holdDyn False (True <$ passBlurE)
+          isUsernameBlurDyn <- holdDyn False (True <$ usernameBlurE)
+          let isUsernameEmptyDyn = Fold.foldr1 (liftA2 (&&)) [fmap ((== "") . strip) (usernameI ^. to _inputElement_value), isUsernameBlurDyn]
+              isEmailEmptyDyn  = Fold.foldr1 (liftA2 (&&)) [fmap ((== "") . strip) (emailI ^. to _inputElement_value), isEmailBlurDyn]
+              isPassEmptyDyn  = Fold.foldr1 (liftA2 (&&)) [fmap ((== "") . strip) (passI ^. to _inputElement_value), isPassBlurDyn]
+              isValidDyn = Fold.foldr1 (liftA2 (||)) [isEmailEmptyDyn, isPassEmptyDyn, isUsernameEmptyDyn]
           submitE <- buttonClass "btn btn-lg btn-primary pull-xs-right" isValidDyn $ text "Sign Up"
           let registrant = Registrant
                 <$> usernameI ^. to _inputElement_value
                 <*> emailI ^. to _inputElement_value
                 <*> passI ^. to _inputElement_value
-          (successE,_,_) <- Client.register (pure . Namespace <$> registrant) submitE
+          (successE,_, submittingDyn) <- Client.register (pure . Namespace <$> registrant) submitE
           tellEvent (fmap (pure . (_LogIn #) . unNamespace) $ successE)
           pure ()
   pure ()

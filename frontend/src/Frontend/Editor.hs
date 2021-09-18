@@ -16,7 +16,7 @@ import qualified Common.Conduit.Api.User.Account        as Account
 import           Common.Route                           (DocumentSlug (..), FrontendRoute (..))
 import qualified Frontend.Conduit.Client                as Client
 import           Frontend.FrontendStateT
-import           Frontend.Utils                         (buttonClass, modifyFormAttrs)
+import           Frontend.Utils                         (buttonClass, modifyFormAttrs, inputDynClass, inputEDynClass, textAreaDynClass, textAreaEDynClass)
 import           Control.Monad.Fix      (MonadFix)
 import           Data.Functor           (void)
 import Data.Text
@@ -63,28 +63,25 @@ editorNone :: forall t m js s
      )
   => Account.Account -> m ()
 editorNone acct = mdo
-  titleI <- elClass "fieldset" "form-group" $ do
+  (titleBlurE,titleI) <- elClass "fieldset" "form-group" $ do
     let attrs = Map.fromList [("class","form-control"),("placeholder","Article Title")]
-    modifyI <- modifyFormAttrs attrs submittingDyn isTitleEmptyDyn
-    inputElement $ def
-      & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
-      & inputElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
-  descI <- elClass "fieldset" "form-group" $ do
+    modifyE <- modifyFormAttrs attrs submittingDyn isTitleEmptyDyn
+    inputDynClass attrs modifyE
+  (descBlurE, descI) <- elClass "fieldset" "form-group" $ do
     let attrs = Map.fromList [("class","form-control"),("placeholder","What's this article about?")]
-    modifyI <- modifyFormAttrs attrs submittingDyn isDescEmptyDyn
-    inputElement $ def
-      & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
-      & inputElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
-  bodyI <- elClass "fieldset" "form-group" $ do
+    modifyE <- modifyFormAttrs attrs submittingDyn isDescEmptyDyn
+    inputDynClass attrs modifyE
+  (bodyBlurE, bodyI) <- elClass "fieldset" "form-group" $ do
     let attrs = Map.fromList [("class","form-control") ,("placeholder","Write your article (in markdown)") ,("rows","8")]
-    modifyI <- modifyFormAttrs attrs submittingDyn isBodyEmptyDyn
-    textAreaElement $ def
-      & textAreaElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
-      & textAreaElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
+    modifyE <- modifyFormAttrs attrs submittingDyn isBodyEmptyDyn
+    textAreaDynClass attrs modifyE
   bodyPreview (bodyI ^. to _textAreaElement_value)
-  let isTitleEmptyDyn :: Dynamic t Bool = fmap ((== "") . strip) (titleI ^. to _inputElement_value)
-      isDescEmptyDyn :: Dynamic t Bool = fmap ((== "") . strip) (descI ^. to _inputElement_value)
-      isBodyEmptyDyn :: Dynamic t Bool = fmap ((== "") . strip) (bodyI ^. to _textAreaElement_value)
+  isTitleBlurDyn <- holdDyn False (True <$ titleBlurE)
+  isDescBlurDyn <- holdDyn False (True <$ descBlurE)
+  isBodyBlurDyn <- holdDyn False (True <$ bodyBlurE)
+  let isTitleEmptyDyn :: Dynamic t Bool = Fold.foldr1 (liftA2 (&&)) [fmap ((== "") . strip) (titleI ^. to _inputElement_value), isTitleBlurDyn]
+      isDescEmptyDyn :: Dynamic t Bool = Fold.foldr1 (liftA2 (&&)) [fmap ((== "") . strip) (descI ^. to _inputElement_value), isDescBlurDyn]
+      isBodyEmptyDyn :: Dynamic t Bool = Fold.foldr1 (liftA2 (&&)) [fmap ((== "") . strip) (bodyI ^. to _textAreaElement_value), isBodyBlurDyn]
       isValidDyn = Fold.foldr1 (liftA2 (||)) [isBodyEmptyDyn, isDescEmptyDyn, isTitleEmptyDyn]
   publishE <- buttonClass "btn btn-lg btn-primary pull-xs-right" isValidDyn $ text "Publish Article"
   let createArticle :: Dynamic t CreateArticle = ArticleAttributes
@@ -121,31 +118,25 @@ editorJust acct slug = mdo
   pbE <- getPostBuild
   (loadSuccessE,_,_) <- Client.getArticle tokenDyn (constDyn . Right $ unDocumentSlug slug) pbE
   let loadSlugE = unNamespace <$> loadSuccessE
-  titleI <- elClass "fieldset" "form-group" $ do
+  (titleBlurE, titleI) <- elClass "fieldset" "form-group" $ do
     let attrs = Map.fromList [("class","form-control")]
-    modifyI <- modifyFormAttrs attrs submittingDyn isTitleEmptyDyn
-    inputElement $ def
-      & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
-      & inputElementConfig_setValue .~ ( Article.title <$> loadSlugE)
-      & inputElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
-  descI <- elClass "fieldset" "form-group" $ do
+    modifyE <- modifyFormAttrs attrs submittingDyn isTitleEmptyDyn
+    inputEDynClass attrs modifyE ( Article.title <$> loadSlugE)
+  (descBlurE, descI) <- elClass "fieldset" "form-group" $ do
     let attrs = Map.fromList [("class","form-control")]
-    modifyI <- modifyFormAttrs attrs submittingDyn isDescEmptyDyn
-    inputElement $ def
-      & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
-      & inputElementConfig_setValue .~ ( Article.description  <$> loadSlugE)
-      & inputElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
-  bodyI <- elClass "fieldset" "form-group" $ do
+    modifyE <- modifyFormAttrs attrs submittingDyn isDescEmptyDyn
+    inputEDynClass attrs modifyE ( Article.description  <$> loadSlugE)
+  (bodyBlurE, bodyI) <- elClass "fieldset" "form-group" $ do
     let attrs = Map.fromList [("class","form-control") ,("rows","8")]
-    modifyI <- modifyFormAttrs attrs submittingDyn isBodyEmptyDyn
-    textAreaElement $ def
-      & textAreaElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
-      & textAreaElementConfig_setValue .~ ( Article.body <$> loadSlugE)
-      & textAreaElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyI
+    modifyE <- modifyFormAttrs attrs submittingDyn isBodyEmptyDyn
+    textAreaEDynClass attrs modifyE (Article.body <$> loadSlugE)
   bodyPreview (bodyI ^. to _textAreaElement_value)
-  let isTitleEmptyDyn :: Dynamic t Bool = fmap ((== "") . strip) (titleI ^. to _inputElement_value)
-      isDescEmptyDyn :: Dynamic t Bool = fmap ((== "") . strip) (descI ^. to _inputElement_value)
-      isBodyEmptyDyn :: Dynamic t Bool = fmap ((== "") . strip) (bodyI ^. to _textAreaElement_value)
+  isTitleBlurDyn <- holdDyn False (True <$ titleBlurE)
+  isDescBlurDyn <- holdDyn False (True <$ descBlurE)
+  isBodyBlurDyn <- holdDyn False (True <$ bodyBlurE)
+  let isTitleEmptyDyn :: Dynamic t Bool = Fold.foldr1 (liftA2 (&&)) [fmap ((== "") . strip) (titleI ^. to _inputElement_value), isTitleBlurDyn]
+      isDescEmptyDyn :: Dynamic t Bool = Fold.foldr1 (liftA2 (&&)) [fmap ((== "") . strip) (descI ^. to _inputElement_value), isDescBlurDyn]
+      isBodyEmptyDyn :: Dynamic t Bool = Fold.foldr1 (liftA2 (&&)) [fmap ((== "") . strip) (bodyI ^. to _textAreaElement_value), isBodyBlurDyn]
       isValidDyn = Fold.foldr1 (liftA2 (||)) [isBodyEmptyDyn, isDescEmptyDyn, isTitleEmptyDyn]
   publishE <- buttonClass "btn btn-lg btn-primary pull-xs-right" isValidDyn $ text "Update Article"
   let updateArticle :: Dynamic t UpdateArticle = ArticleAttributes

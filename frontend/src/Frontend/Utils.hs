@@ -135,7 +135,6 @@ routeLinkDynAttr attrDyn rDyn m = do
   setRoute $ current rDyn <@ domEvent Click e
   return a
 
--- Shall use dom event Blur in the future
 modifyFormAttrs
   :: forall t m a
   . (DomBuilder t m, PostBuild t m)
@@ -152,3 +151,54 @@ modifyFormAttrs attrs disabledDyn isEmptyDyn = do
     addAttrs (False, True)  = Map.insert "style" "border-color: red" attrs
     addAttrs (False, False) = attrs
 
+inputDynClass
+  :: forall t m a
+  . (DomBuilder t m, PostBuild t m)
+  => Map.Map AttributeName Text
+  -> Event t (Map.Map AttributeName (Maybe Text))
+  -> m (Event t (),InputElement EventResult (DomBuilderSpace m) t)
+inputDynClass attrs modifyE  = do
+  e <-  inputElement $ (def :: (InputElementConfig EventResult t (DomBuilderSpace m)))
+      & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
+      & inputElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyE
+  pure $ (domEvent Blur e, e)
+
+inputEDynClass
+  :: forall t m a
+  . (DomBuilder t m, PostBuild t m)
+  => Map.Map AttributeName Text
+  -> Event t (Map.Map AttributeName (Maybe Text))
+  -> Event t Text
+  -> m (Event t (),InputElement EventResult (DomBuilderSpace m) t)
+inputEDynClass attrs modifyE valueE= do
+  e <-  inputElement $ (def :: (InputElementConfig EventResult t (DomBuilderSpace m)))
+      & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
+      & inputElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyE
+      & inputElementConfig_setValue .~ valueE
+  pure $ (domEvent Blur e, e)
+
+textAreaDynClass
+  :: forall t m a
+  . (DomBuilder t m, PostBuild t m)
+  => Map.Map AttributeName Text
+  -> Event t (Map.Map AttributeName (Maybe Text))
+  -> m (Event t (),TextAreaElement EventResult (DomBuilderSpace m) t)
+textAreaDynClass attrs modifyE = do
+  e <-  textAreaElement $ (def :: (TextAreaElementConfig EventResult t (DomBuilderSpace m)))
+      & textAreaElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
+      & textAreaElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyE
+  pure $ (domEvent Blur e, e)
+
+textAreaEDynClass
+  :: forall t m a
+  . (DomBuilder t m, PostBuild t m)
+  => Map.Map AttributeName Text
+  -> Event t (Map.Map AttributeName (Maybe Text))
+  -> Event t Text
+  -> m (Event t (),TextAreaElement EventResult (DomBuilderSpace m) t)
+textAreaEDynClass attrs modifyE valueE= do
+  e <-  textAreaElement $ (def :: (TextAreaElementConfig EventResult t (DomBuilderSpace m)))
+      & textAreaElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
+      & textAreaElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyE
+      & textAreaElementConfig_setValue .~ valueE
+  pure $ (domEvent Blur e, e)
