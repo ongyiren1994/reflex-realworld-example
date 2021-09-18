@@ -40,6 +40,7 @@ import           Frontend.Utils                            (buttonClass, routeLi
                                                             showText, modifyFormAttrs)
 import Reflex.Dom (Prerender)
 import qualified Frontend.Conduit.Client as Client
+import           Servant.Common.Req     (QParam (..))
 
 article
   :: forall t m js s
@@ -95,6 +96,7 @@ articleMeta
      , MonadHold t m
      , MonadFix m
      )
+  -- The article is static, use articleDyn instead?
   => Article.Article
   -> m ()
 articleMeta art = elClass "div" "article-meta" $ do
@@ -108,30 +110,26 @@ articleMeta art = elClass "div" "article-meta" $ do
   where
     actions profile = mdo
       accountDyn <- reviewFrontendState loggedInAccount
-      -- TODO : Do something with this click
-      _ <- buttonClass "btn btn-sm btn-outline-secondary action-btn" (constDyn False) $ do
+      followE <- buttonClass "btn btn-sm btn-outline-secondary action-btn" (constDyn False) $ do
         elClass "i" "ion-plus-round" blank
-        text " Follow "
-        text (Profile.username profile)
+        dynText $ fmap (\x -> if x then " Following " <> (Profile.username profile) else " Follow " <> (Profile.username profile)) followDyn
         text " ("
         -- TODO : Get this value
         elClass "span" "counter" $ text "0"
         text ")"
-      -- TODO : Do something with this click
       text " "
-      toFavI <- buttonClass "btn btn-sm btn-outline-primary action-btn" (constDyn False) $ do
-        elClass "i" "ion-thumbsup" blank
-      toUnfavI <- buttonClass "btn btn-sm btn-outline-primary action-btn" (constDyn False) $ do
-        elClass "i" "ion-thumbsdown" blank
-      elClass "span" "counter" $ do
-        countI <- foldDyn ($) (Article.favoritesCount art :: Integer) $ leftmost [(+ 1) <$ favI, (+ (-1)) <$ unFavI]
+      -- Abit dodgy, can be improved
+      favE <- buttonClass "btn btn-sm btn-outline-primary action-btn" (constDyn False) $ do
         elClass "i" "ion-heart" blank
-        text "     "
-        -- This one shan't be allowed to go negative?
-        elClass "span" "counter" $ display countI
-        text "     "
-      (favI ,_ ,_) <- Client.favorite ((fmap . fmap) Account.token accountDyn) (Right . Article.slug <$> constDyn art) toFavI
-      (unFavI ,_ ,_) <- Client.unFavorite ((fmap . fmap) Account.token accountDyn) (Right . Article.slug <$> constDyn art) toUnfavI
+        dynText $ fmap (\x -> if x then " Favoring Post" else " Favorite Post" ) favDyn
+        text " ("
+        dynText $ fmap showText favCountDyn
+        text ")"
+      favCountDyn <- foldDyn ($) (Article.favoritesCount art :: Integer) (fmap (\x -> if x then (+ 1) else (+ (-1))) (updated favDyn))
+      favDyn <- toggle (Article.favorited art :: Bool) favEE
+      followDyn <- toggle (Profile.following profile :: Bool) followEE
+      (favEE ,_ ,_) <- Client.favorite ((fmap . fmap) Account.token accountDyn) ( fmap QParamSome (Article.slug <$> constDyn art)) ( fmap QParamSome favDyn) favE
+      (followEE ,_ ,_) <- Client.follow ((fmap . fmap) Account.token accountDyn) (fmap QParamSome (constDyn (Profile.username profile))) (fmap QParamSome followDyn) followE
       -- Can be done better here?
       editEE <- dyn $
         liftA2

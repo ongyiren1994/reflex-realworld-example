@@ -43,6 +43,7 @@ import qualified Common.Conduit.Api.Articles.Comment       as ApiComment
 import qualified Common.Conduit.Api.Articles.CreateComment as ApiCreateComment
 import qualified Common.Conduit.Api.Profiles.Profile       as ApiProfile
 import qualified Common.Conduit.Api.User.Account           as ApiAccount
+import qualified Backend.Conduit.Database.Users as DBUser
 
 data ConduitServerEnv = ConduitServerEnv
   { _dbPool      :: Pool Connection
@@ -98,7 +99,7 @@ userServer = currentUserServer :<|> updateUserServer
       userToAccount newUser
 
 articlesServer :: Server (ArticlesApi Claim) ConduitServerContext ConduitServerM
-articlesServer = listArticlesServer :<|> createArticleServer :<|> feedServer :<|> deleteArticleServer :<|> updateArticleServer :<|> favoriteArticleServer :<|> unFavoriteArticleServer :<|> articleServer
+articlesServer = listArticlesServer :<|> createArticleServer :<|> feedServer :<|> deleteArticleServer :<|> updateArticleServer :<|> favoriteArticleServer :<|> articleServer
   where
     listArticlesServer authRes limit offset tags authors favorited = runConduitErrorsT $ do
       runDatabase $ do
@@ -145,24 +146,16 @@ articlesServer = listArticlesServer :<|> createArticleServer :<|> feedServer :<|
         validUpdate <- withExceptT failedValidation $ DBArticles.validateAttributesForUpdate article update
         liftQuery $ Namespace <$> DBArticles.update (primaryKey currUser) slug validUpdate
 
-    favoriteArticleServer authRes slug  = runConduitErrorsT $ do
+    favoriteArticleServer authRes slugMay isFavoriteMay = runConduitErrorsT $ do
       runDatabase $ do
+        isFavorite <- isFavoriteMay ?? notFound "Query missing parameters"
+        slug <- slugMay ?? notFound "Query missing parameters"
         currUser    <- loadAuthorizedUser authRes
         articleMay  <- liftQuery $ DBArticles.find (Just $ primaryKey currUser) slug
-        article     <- articleMay ?? notFound ("Article("<> (pack $ show slug) <>")")
-        when (ApiProfile.username (ApiArticle.author article) /= DBUser.username currUser) $
-          throwError forbidden
-        liftQuery $ DBArticles.favorite (DBArticle.ArticleId (ApiArticle.id article)) (primaryKey currUser)
-        pure NoContent
-
-    unFavoriteArticleServer authRes slug  = runConduitErrorsT $ do
-      runDatabase $ do
-        currUser    <- loadAuthorizedUser authRes
-        articleMay  <- liftQuery $ DBArticles.find (Just $ primaryKey currUser) slug
-        article     <- articleMay ?? notFound ("Article("<> (pack $ show slug) <>")")
-        when (ApiProfile.username (ApiArticle.author article) /= DBUser.username currUser) $
-          throwError forbidden
-        liftQuery $ DBArticles.unfavorite (DBArticle.ArticleId (ApiArticle.id article)) (primaryKey currUser)
+        article      <- articleMay ?? notFound ("Article("<> (pack $ show slug) <>")")
+        case isFavorite of
+          True -> liftQuery $ DBArticles.unfavorite (DBArticle.ArticleId (ApiArticle.id article)) (primaryKey currUser)
+          False -> liftQuery $ DBArticles.favorite (DBArticle.ArticleId (ApiArticle.id article)) (primaryKey currUser)
         pure NoContent
 
     articleServer authRes slug = getArticleServer :<|> commentsServer
@@ -206,13 +199,24 @@ articlesServer = listArticlesServer :<|> createArticleServer :<|> feedServer :<|
             pure NoContent
 
 profileServer :: Server (ProfilesApi Claim) ConduitServerContext ConduitServerM
-profileServer = profileGetServer
+profileServer = profileGetServer :<|> profileFollowServer
   where
     profileGetServer authRes username = runConduitErrorsT $ do
       runDatabase $ do
         currUserMay <- optionallyLoadAuthorizedUser authRes
         profileMay  <- liftQuery $ DBUsers.findProfile (primaryKey <$> currUserMay) username
         Namespace <$> (profileMay ?? (notFound ("Profile(" <> username <> ")")))
+
+    profileFollowServer authRes usernameMay isFollowedMay = runConduitErrorsT $ do
+      runDatabase $ do
+            username <- usernameMay ?? notFound "Query missing parameters"
+            isFollowed <- isFollowedMay ?? notFound "Query missing parameters"
+            currUser    <- loadAuthorizedUser authRes
+            profileMay  <- liftQuery $ DBUsers.findProfile (Just $ primaryKey currUser) username
+            profile <- profileMay ?? (notFound ("Profile(" <> username <> ")"))
+            case isFollowed of
+              True -> liftQuery $ DBUsers.unfollow (primaryKey currUser) (DBUser.UserId (ApiProfile.id profile)) >> pure NoContent
+              False -> liftQuery $ DBUsers.follow (primaryKey currUser) (DBUser.UserId (ApiProfile.id profile)) >> pure NoContent
 
 tagsServer :: Server (TagsApi Claim) ConduitServerContext ConduitServerM
 tagsServer = tagsAllServer

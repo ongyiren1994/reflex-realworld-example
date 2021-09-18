@@ -111,12 +111,8 @@ data ArticlesClient f t m = ArticlesClient
     -> m (Event t (f (ReqResult () (Namespace "article" Article))))
   , _articlesFavorite
     :: Dynamic t (f (Maybe Token))
-    -> f (Dynamic t (Either Text Text))
-    -> Event t ()
-    -> m (Event t (f (ReqResult () NoContent)))
-  , _articlesUnfavorite
-    :: Dynamic t (f (Maybe Token))
-    -> f (Dynamic t (Either Text Text))
+    -> Dynamic t (f (QParam Text))
+    -> Dynamic t (f (QParam Bool))
     -> Event t ()
     -> m (Event t (f (ReqResult () NoContent)))
   }
@@ -128,6 +124,12 @@ data ProfilesClient f t m = ProfilesClient
     -> (f (Dynamic t (Either Text Text)))
     -> Event t ()
     -> m (Event t (f (ReqResult () (Namespace "profile" Profile))))
+  , _profileFollow
+    :: Dynamic t (f (Maybe Token))
+    -> Dynamic t (f (QParam Text))
+    -> Dynamic t (f (QParam Bool))
+    -> Event t ()
+    -> m (Event t (f (ReqResult () NoContent)))
   }
 makeLenses ''ProfilesClient
 
@@ -166,13 +168,13 @@ getClient = mkClient (pure $ BasePath "/") -- This would be much better if there
             _userCurrent :<|> _userUpdate = apiUserC
         _apiArticles = ArticlesClient { .. }
           where
-            _articlesList :<|> _articlesCreate :<|> _articlesFeed :<|> _articlesDelete :<|> _articlesUpdate  :<|> _articlesFavorite :<|> _articlesUnfavorite :<|> articleC = apiArticlesC
+            _articlesList :<|> _articlesCreate :<|> _articlesFeed :<|> _articlesDelete :<|> _articlesUpdate  :<|> _articlesFavorite :<|> articleC = apiArticlesC
             _articlesArticle auth slug = ArticleClient { .. }
               where
                 _articleGet  :<|> _articleComments :<|> _articleCommentCreate :<|> _articleCommentDelete = articleC auth slug
         _apiProfiles = ProfilesClient { .. }
           where
-            _profileGet = apiProfilesC
+            _profileGet :<|> _profileFollow = apiProfilesC
         _apiTags = TagsClient { .. }
           where
             _tagsAll = apiTagsC

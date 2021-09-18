@@ -52,16 +52,10 @@ type ArticlesApi token =
   :> Put '[JSON] (Namespace "article" Article)
   ) :<|> (
     Auth '[JWT] token
-  :> "favorite"
-  :> Capture "slug" Text
+  :> QueryParam "slug" Text
+  :> QueryParam "favorite" Bool
   :> GetNoContent '[JSON] NoContent
-  ) :<|> (
-    Auth '[JWT] token
-  :> "unfavorite"
-  :> Capture "slug" Text
-  :> GetNoContent '[JSON] NoContent
-  )
-  :<|> ArticleApi token
+  ) :<|> ArticleApi token
 
 
 type ArticleApi token = (

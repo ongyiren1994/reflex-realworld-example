@@ -88,8 +88,22 @@ getProfile tokenDyn usernameDyn submitE = fmap switchClientRes $ prerender (pure
   resE <- unIdF $ getClient ^. apiProfiles . profileGet . fillIdF tokenDyn . fillId usernameDyn . fill submitE
   wireClientRes submitE resE
 
--- TODO FollowUser
--- TODO UnFollowUser
+-- Shall use post instead of get
+follow
+  :: (Reflex t, Applicative m, Prerender js t m)
+  => Dynamic t (Maybe Token)
+  -> Dynamic t (QParam Text)
+  -> Dynamic t (QParam Bool)
+  -> Event t ()
+  -> m (ClientRes t NoContent)
+follow tokenDyn usernameDyn isFollowedDyn submitE =
+  fmap switchClientRes $ prerender (pure emptyClientRes) $ do
+    resE <- unIdF $ getClient ^. apiProfiles . profileFollow
+      . fillIdF tokenDyn
+      . fillIdF usernameDyn
+      . fillIdF isFollowedDyn
+      . fill submitE
+    wireClientRes submitE resE
 
 listArticles
   :: (Reflex t, Applicative m, Prerender js t m)
@@ -219,31 +233,20 @@ deleteComment tokenDyn slugDyn commentIdDyn submitE =
       . fill submitE
     wireClientRes submitE resE
 
+-- Shall use post instead of get
 favorite
   :: (Reflex t, Applicative m, Prerender js t m)
   => Dynamic t (Maybe Token)
-  -> Dynamic t (Either Text Text)
+  -> Dynamic t (QParam Text)
+  -> Dynamic t (QParam Bool)
   -> Event t ()
   -> m (ClientRes t NoContent)
-favorite tokenDyn slugDyn submitE =
+favorite tokenDyn slugDyn isFavoritedDyn submitE =
   fmap switchClientRes $ prerender (pure emptyClientRes) $ do
     resE <- unIdF $ getClient ^. apiArticles . articlesFavorite
       . fillIdF tokenDyn
-      . fillId slugDyn
-      . fill submitE
-    wireClientRes submitE resE
-
-unFavorite
-  :: (Reflex t, Applicative m, Prerender js t m)
-  => Dynamic t (Maybe Token)
-  -> Dynamic t (Either Text Text)
-  -> Event t ()
-  -> m (ClientRes t NoContent)
-unFavorite tokenDyn slugDyn submitE =
-  fmap switchClientRes $ prerender (pure emptyClientRes) $ do
-    resE <- unIdF $ getClient ^. apiArticles . articlesUnfavorite
-      . fillIdF tokenDyn
-      . fillId slugDyn
+      . fillIdF slugDyn
+      . fillIdF isFavoritedDyn
       . fill submitE
     wireClientRes submitE resE
 
