@@ -23,12 +23,14 @@ import Common.Conduit.Api.Articles.Articles      (Articles)
 import Common.Conduit.Api.Articles.Attributes    (CreateArticle, UpdateArticle)
 import Common.Conduit.Api.Articles.Comment       (Comment)
 import Common.Conduit.Api.Articles.CreateComment (CreateComment)
+import Common.Conduit.Api.Articles.Favorite      (Favorite)
 import Common.Conduit.Api.Namespace              (Namespace)
 import Common.Conduit.Api.Profiles               (Profile)
 import Common.Conduit.Api.User.Account           (Account, Token, getToken)
 import Common.Conduit.Api.User.Update            (UpdateUser)
 import Common.Conduit.Api.Users.Credentials      (Credentials)
 import Common.Conduit.Api.Users.Registrant       (Registrant)
+import Common.Conduit.Api.Profiles.Follow (Follow)
 
 fill :: a -> Getting f (a -> b) b
 fill a = to ($ a)
@@ -111,8 +113,7 @@ data ArticlesClient f t m = ArticlesClient
     -> m (Event t (f (ReqResult () (Namespace "article" Article))))
   , _articlesFavorite
     :: Dynamic t (f (Maybe Token))
-    -> Dynamic t (f (QParam Text))
-    -> Dynamic t (f (QParam Bool))
+    -> Dynamic t (f (Either Text (Namespace "article" Favorite)))
     -> Event t ()
     -> m (Event t (f (ReqResult () NoContent)))
   }
@@ -126,8 +127,7 @@ data ProfilesClient f t m = ProfilesClient
     -> m (Event t (f (ReqResult () (Namespace "profile" Profile))))
   , _profileFollow
     :: Dynamic t (f (Maybe Token))
-    -> Dynamic t (f (QParam Text))
-    -> Dynamic t (f (QParam Bool))
+    -> Dynamic t (f (Either Text (Namespace "profile" Follow)))
     -> Event t ()
     -> m (Event t (f (ReqResult () NoContent)))
   }

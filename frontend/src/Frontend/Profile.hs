@@ -14,6 +14,7 @@ import           Servant.Common.Req     (QParam (..))
 import           Common.Conduit.Api.Articles.Articles (Articles (..))
 import           Common.Conduit.Api.Namespace         (Namespace(Namespace))
 import qualified Common.Conduit.Api.Profiles.Profile  as Profile
+import qualified Common.Conduit.Api.Profiles.Follow  as Follow
 import           Common.Route                         (FrontendRoute (..), ProfileRoute (..), Username (..))
 import           Frontend.ArticlePreview              (articlesPreview, profileImage)
 import qualified Frontend.Conduit.Client              as Client
@@ -53,7 +54,7 @@ profile usernameDyn = do
               elClass "i" "ion-plus-round" blank
               dynText $ fmap (\x -> if x then " Following " <> (Profile.username acct) else " Follow " <> (Profile.username acct)) followDyn
             followDyn <- toggle (Profile.following acct :: Bool) followEE
-            (followEE ,_ ,_) <- Client.follow tokDyn (fmap QParamSome (constDyn (Profile.username acct))) (fmap QParamSome followDyn) followE
+            (followEE ,_ ,_) <- Client.follow tokDyn ((Right . Namespace) <$> (Follow.Follow <$> constDyn (Profile.username acct) <*> followDyn)) followE
             text " "
   elClass "div" "container" $
     elClass "div" "row" $

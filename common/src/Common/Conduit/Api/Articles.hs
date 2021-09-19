@@ -16,6 +16,7 @@ import Servant.Auth (Auth, JWT)
 
 import Common.Conduit.Api.Articles.Article       as Article (Article (Article))
 import Common.Conduit.Api.Articles.Articles      as Articles (Articles (Articles))
+import Common.Conduit.Api.Articles.Favorite      as Articles (Favorite(..))
 import Common.Conduit.Api.Articles.Attributes    as Attributes (ArticleAttributes (ArticleAttributes), CreateArticle,
                                                   UpdateArticle)
 import Common.Conduit.Api.Articles.Comment       as Comment (Comment (Comment))
@@ -52,9 +53,9 @@ type ArticlesApi token =
   :> Put '[JSON] (Namespace "article" Article)
   ) :<|> (
     Auth '[JWT] token
-  :> QueryParam "slug" Text
-  :> QueryParam "favorite" Bool
-  :> GetNoContent '[JSON] NoContent
+  :> "favorite"
+  :> ReqBody '[JSON] (Namespace "article" Favorite)
+  :> PostNoContent '[JSON] NoContent
   ) :<|> ArticleApi token
 
 

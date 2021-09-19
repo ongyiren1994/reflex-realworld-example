@@ -21,9 +21,11 @@ import           Common.Conduit.Api.Articles.Articles      (Articles)
 import           Common.Conduit.Api.Articles.Attributes    (CreateArticle, UpdateArticle)
 import           Common.Conduit.Api.Articles.Comment       (Comment)
 import           Common.Conduit.Api.Articles.CreateComment (CreateComment)
+import           Common.Conduit.Api.Articles.Favorite      (Favorite)
 import           Common.Conduit.Api.Errors                 (ErrorBody)
 import           Common.Conduit.Api.Namespace              (Namespace)
 import           Common.Conduit.Api.Profiles               (Profile)
+import           Common.Conduit.Api.Profiles.Follow        (Follow)
 import           Common.Conduit.Api.User.Account           (Account, Token)
 import           Common.Conduit.Api.User.Update            (UpdateUser)
 import           Common.Conduit.Api.Users.Credentials      (Credentials)
@@ -88,20 +90,17 @@ getProfile tokenDyn usernameDyn submitE = fmap switchClientRes $ prerender (pure
   resE <- unIdF $ getClient ^. apiProfiles . profileGet . fillIdF tokenDyn . fillId usernameDyn . fill submitE
   wireClientRes submitE resE
 
--- Shall use post instead of get
 follow
   :: (Reflex t, Applicative m, Prerender js t m)
   => Dynamic t (Maybe Token)
-  -> Dynamic t (QParam Text)
-  -> Dynamic t (QParam Bool)
+  -> Dynamic t (Either Text (Namespace "profile" Follow))
   -> Event t ()
   -> m (ClientRes t NoContent)
-follow tokenDyn usernameDyn isFollowedDyn submitE =
+follow tokenDyn followDyn submitE =
   fmap switchClientRes $ prerender (pure emptyClientRes) $ do
     resE <- unIdF $ getClient ^. apiProfiles . profileFollow
       . fillIdF tokenDyn
-      . fillIdF usernameDyn
-      . fillIdF isFollowedDyn
+      . fillIdF followDyn
       . fill submitE
     wireClientRes submitE resE
 
@@ -233,20 +232,17 @@ deleteComment tokenDyn slugDyn commentIdDyn submitE =
       . fill submitE
     wireClientRes submitE resE
 
--- Shall use post instead of get
 favorite
   :: (Reflex t, Applicative m, Prerender js t m)
   => Dynamic t (Maybe Token)
-  -> Dynamic t (QParam Text)
-  -> Dynamic t (QParam Bool)
+  -> Dynamic t (Either Text (Namespace "article" Favorite))
   -> Event t ()
   -> m (ClientRes t NoContent)
-favorite tokenDyn slugDyn isFavoritedDyn submitE =
+favorite tokenDyn slugDyn submitE =
   fmap switchClientRes $ prerender (pure emptyClientRes) $ do
     resE <- unIdF $ getClient ^. apiArticles . articlesFavorite
       . fillIdF tokenDyn
       . fillIdF slugDyn
-      . fillIdF isFavoritedDyn
       . fill submitE
     wireClientRes submitE resE
 

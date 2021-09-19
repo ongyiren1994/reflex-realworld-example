@@ -42,7 +42,9 @@ import qualified Common.Conduit.Api.Articles.Articles      as ApiArticles
 import qualified Common.Conduit.Api.Articles.Comment       as ApiComment
 import qualified Common.Conduit.Api.Articles.CreateComment as ApiCreateComment
 import qualified Common.Conduit.Api.Profiles.Profile       as ApiProfile
+import qualified Common.Conduit.Api.Profiles.Follow        as ApiFollow
 import qualified Common.Conduit.Api.User.Account           as ApiAccount
+import qualified Common.Conduit.Api.Articles.Favorite      as ApiFavorite
 import qualified Backend.Conduit.Database.Users as DBUser
 
 data ConduitServerEnv = ConduitServerEnv
@@ -146,14 +148,12 @@ articlesServer = listArticlesServer :<|> createArticleServer :<|> feedServer :<|
         validUpdate <- withExceptT failedValidation $ DBArticles.validateAttributesForUpdate article update
         liftQuery $ Namespace <$> DBArticles.update (primaryKey currUser) slug validUpdate
 
-    favoriteArticleServer authRes slugMay isFavoriteMay = runConduitErrorsT $ do
+    favoriteArticleServer authRes (Namespace favorite) = runConduitErrorsT $ do
       runDatabase $ do
-        isFavorite <- isFavoriteMay ?? notFound "Query missing parameters"
-        slug <- slugMay ?? notFound "Query missing parameters"
         currUser    <- loadAuthorizedUser authRes
-        articleMay  <- liftQuery $ DBArticles.find (Just $ primaryKey currUser) slug
-        article      <- articleMay ?? notFound ("Article("<> (pack $ show slug) <>")")
-        case isFavorite of
+        articleMay  <- liftQuery $ DBArticles.find (Just $ primaryKey currUser) ( ApiFavorite.slug favorite)
+        article      <- articleMay ?? notFound ("Article("<> (pack $ show (ApiFavorite.slug favorite) <>")"))
+        case ApiFavorite.bool favorite of
           True -> liftQuery $ DBArticles.unfavorite (DBArticle.ArticleId (ApiArticle.id article)) (primaryKey currUser)
           False -> liftQuery $ DBArticles.favorite (DBArticle.ArticleId (ApiArticle.id article)) (primaryKey currUser)
         pure NoContent
@@ -207,14 +207,12 @@ profileServer = profileGetServer :<|> profileFollowServer
         profileMay  <- liftQuery $ DBUsers.findProfile (primaryKey <$> currUserMay) username
         Namespace <$> (profileMay ?? (notFound ("Profile(" <> username <> ")")))
 
-    profileFollowServer authRes usernameMay isFollowedMay = runConduitErrorsT $ do
+    profileFollowServer authRes (Namespace follow) = runConduitErrorsT $ do
       runDatabase $ do
-            username <- usernameMay ?? notFound "Query missing parameters"
-            isFollowed <- isFollowedMay ?? notFound "Query missing parameters"
             currUser    <- loadAuthorizedUser authRes
-            profileMay  <- liftQuery $ DBUsers.findProfile (Just $ primaryKey currUser) username
-            profile <- profileMay ?? (notFound ("Profile(" <> username <> ")"))
-            case isFollowed of
+            profileMay  <- liftQuery $ DBUsers.findProfile (Just $ primaryKey currUser) (ApiFollow.username follow)
+            profile <- profileMay ?? (notFound ("Profile(" <> (ApiFollow.username follow) <> ")"))
+            case ApiFollow.bool follow of
               True -> liftQuery $ DBUsers.unfollow (primaryKey currUser) (DBUser.UserId (ApiProfile.id profile)) >> pure NoContent
               False -> liftQuery $ DBUsers.follow (primaryKey currUser) (DBUser.UserId (ApiProfile.id profile)) >> pure NoContent
 

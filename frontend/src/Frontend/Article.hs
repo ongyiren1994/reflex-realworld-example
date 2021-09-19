@@ -26,10 +26,12 @@ import qualified Text.MMark             as MMark
 
 
 import qualified Common.Conduit.Api.Articles.Article       as Article
+import qualified Common.Conduit.Api.Articles.Favorite      as Favorite
 import qualified Common.Conduit.Api.Articles.Comment       as Comment
 import qualified Common.Conduit.Api.Articles.CreateComment as CreateComment
 import           Common.Conduit.Api.Namespace              (Namespace (..), unNamespace)
 import qualified Common.Conduit.Api.Profiles.Profile       as Profile
+import qualified Common.Conduit.Api.Profiles.Follow        as Follow
 import qualified Common.Conduit.Api.User.Account           as Account
 import           Common.Route                              (DocumentSlug (..), FrontendRoute (..),
                                                             Username (..))
@@ -128,8 +130,9 @@ articleMeta art = elClass "div" "article-meta" $ do
       favCountDyn <- foldDyn ($) (Article.favoritesCount art :: Integer) (fmap (\x -> if x then (+ 1) else (+ (-1))) (updated favDyn))
       favDyn <- toggle (Article.favorited art :: Bool) favEE
       followDyn <- toggle (Profile.following profile :: Bool) followEE
-      (favEE ,_ ,_) <- Client.favorite ((fmap . fmap) Account.token accountDyn) ( fmap QParamSome (Article.slug <$> constDyn art)) ( fmap QParamSome favDyn) favE
-      (followEE ,_ ,_) <- Client.follow ((fmap . fmap) Account.token accountDyn) (fmap QParamSome (constDyn (Profile.username profile))) (fmap QParamSome followDyn) followE
+      (favEE ,_ ,_) <- Client.favorite ((fmap . fmap) Account.token accountDyn) ((Right . Namespace) <$> (Favorite.Favorite <$> (Article.slug <$> constDyn art) <*> favDyn)) favE
+      (followEE ,_ ,_) <- Client.follow ((fmap . fmap) Account.token accountDyn) ((Right . Namespace) <$> (Follow.Follow <$> constDyn (Profile.username profile) <*> followDyn)) followE
+
       -- Can be done better here?
       editEE <- dyn $
         liftA2
