@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, LambdaCase, MultiParamTypeClasses, OverloadedStrings, PatternSynonyms #-}
-{-# LANGUAGE ScopedTypeVariables, TypeApplications                                                   #-}
+{-# LANGUAGE ScopedTypeVariables, TypeApplications, RecursiveDo                                                 #-}
 
 module Frontend.Settings where
 
@@ -19,7 +19,11 @@ import           Common.Conduit.Api.User.Update  (UpdateUser (UpdateUser))
 import           Common.Route                    (FrontendRoute (..), Username (..))
 import qualified Frontend.Conduit.Client         as Client
 import           Frontend.FrontendStateT
-import           Frontend.Utils                  (buttonClass)
+import           Frontend.Utils                         (buttonClass, modifyFormAttrs, inputDynClass, inputEDynClass, textAreaDynClass, textAreaEDynClass)
+import Data.Foldable as Fold
+import Data.Text
+import Control.Applicative (liftA2)
+import           Control.Monad.Fix      (MonadFix)
 
 settings
   :: ( DomBuilder t m
@@ -30,6 +34,8 @@ settings
      , AsFrontendEvent e
      , HasFrontendState t s m
      , HasLoggedInAccount s
+     , MonadFix m
+     , MonadHold t m
      )
   => m ()
 -- First we should look at userWidget !
@@ -46,47 +52,40 @@ settings = userWidget $ \acct -> elClass "div" "settings-page" $ do
           (loadSuccessE,_,_) <- Client.getCurrentUser tokenDyn pbE
           let loadAccountE = unNamespace <$> loadSuccessE
 
-          el "fieldset" $ do
-            urlI <- elClass "fieldset" "form-group" $
-              inputElement $ def
-                & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ Map.fromList
-                  [("class","form-control")
-                  ,("placeholder","URL of profile picture")
-                  ]
-                -- Note that we set the form val from AJAX returned data
-                & inputElementConfig_setValue .~ (fromMaybe "" . Account.image <$> loadAccountE)
-            usernameI <- elClass "fieldset" "form-group" $
-              inputElement $ def
-                & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ Map.fromList
-                  [("class","form-control")
-                  ,("placeholder","Your name")
-                  ]
-                & inputElementConfig_setValue .~ (Account.username <$> loadAccountE)
-            bioI <- elClass "fieldset" "form-group" $
-              textAreaElement $ def
-                & textAreaElementConfig_elementConfig.elementConfig_initialAttributes .~ Map.fromList
-                  [("class","form-control")
-                  ,("placeholder","Short bio about you")
-                  ,("rows","8")
-                  ]
-                & textAreaElementConfig_setValue .~ (Account.bio <$> loadAccountE)
-
-            emailI <- elClass "fieldset" "form-group" $
-              inputElement $ def
-                & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ Map.fromList
-                  [("class","form-control")
-                  ,("placeholder","Email")
-                  ,("type","input")
-                  ]
-                & inputElementConfig_setValue .~ (Account.email <$> loadAccountE)
-            passwordI <- elClass "fieldset" "form-group" $
-              inputElement $ def
-                & inputElementConfig_elementConfig.elementConfig_initialAttributes .~ Map.fromList
-                  [("class","form-control")
-                  ,("placeholder","Password")
-                  ,("type","password")
-                  ]
-            updateE <- buttonClass "btn btn-lg btn-primary pull-xs-right" (constDyn False) $ text "Update Settings"
+          el "fieldset" $ mdo
+            (urlBlurE, urlI) <- elClass "fieldset" "form-group" $ do
+              let attrs = Map.fromList [("class","form-control") ,("placeholder","URL of profile picture")]
+              modifyE <- modifyFormAttrs attrs submittingDyn isUrlEmptyDyn
+              inputEDynClass attrs modifyE (fromMaybe "" . Account.image <$> loadAccountE)
+            (usernameBlurE, usernameI) <- elClass "fieldset" "form-group" $ do
+              let attrs = Map.fromList [("class","form-control"),("placeholder","Your name")]
+              modifyE <- modifyFormAttrs attrs submittingDyn isUsernameEmptyDyn
+              inputEDynClass attrs modifyE (Account.username <$> loadAccountE)
+            (bioBlurE, bioI) <- elClass "fieldset" "form-group" $ do
+              let attrs = Map.fromList [("class","form-control"),("placeholder","Short bio about you"),("rows","8")]
+              modifyE <- modifyFormAttrs attrs submittingDyn isBioEmptyDyn
+              textAreaEDynClass attrs modifyE (Account.bio <$> loadAccountE)
+            (emailBlurE, emailI) <- elClass "fieldset" "form-group" $ do
+              let attrs = Map.fromList [("class","form-control"),("placeholder","Email"),("type","input")]
+              modifyE <- modifyFormAttrs attrs submittingDyn isEmailEmptyDyn
+              inputEDynClass attrs modifyE (Account.email <$> loadAccountE)
+            (passwordBlurE, passwordI) <- elClass "fieldset" "form-group" $ do
+              let attrs = Map.fromList [("class","form-control"),("placeholder","Password"),("type","password")]
+              modifyE <- modifyFormAttrs attrs submittingDyn isPasswordEmptyDyn
+              inputDynClass attrs modifyE
+            isUrlBlurDyn <- holdDyn False (True <$ urlBlurE)
+            isUsernameBlurDyn <- holdDyn False (True <$ usernameBlurE)
+            isBioBlurDyn <- holdDyn False (True <$ bioBlurE)
+            isEmailBlurDyn <- holdDyn False (True <$ emailBlurE)
+            isPasswordBlurDyn <- holdDyn False (True <$ passwordBlurE)
+            -- Why cannot add type signatures here?
+            let isUrlEmptyDyn  = Fold.foldr1 (liftA2 (&&)) [fmap ((== "") . strip) (urlI ^. to _inputElement_value), isUrlBlurDyn]
+                isUsernameEmptyDyn  = Fold.foldr1 (liftA2 (&&)) [fmap ((== "") . strip) (usernameI ^. to _inputElement_value), isUsernameBlurDyn]
+                isBioEmptyDyn  = Fold.foldr1 (liftA2 (&&)) [fmap ((== "") . strip) (bioI ^. to _textAreaElement_value), isBioBlurDyn]
+                isEmailEmptyDyn  = Fold.foldr1 (liftA2 (&&)) [fmap ((== "") . strip) (emailI ^. to _inputElement_value), isEmailBlurDyn]
+                isPasswordEmptyDyn  = Fold.foldr1 (liftA2 (&&)) [fmap ((== "") . strip) (passwordI ^. to _inputElement_value), isPasswordBlurDyn]
+                isValidDyn = Fold.foldr1 (liftA2 (||)) [isUrlEmptyDyn, isUsernameEmptyDyn, isBioEmptyDyn, isEmailEmptyDyn, isPasswordEmptyDyn]
+            updateE <- buttonClass "btn btn-lg btn-primary pull-xs-right" isValidDyn $ text "Update Settings"
             -- Here we dont want to update the password if it was left blank
             let updateDyn = UpdateUser
                   <$> (mfilter (not . Text.null) . Just <$> passwordI ^. to _inputElement_value)
@@ -97,7 +96,7 @@ settings = userWidget $ \acct -> elClass "div" "settings-page" $ do
 
             -- Make the backend call when the submit button is clicked
             -- and we have a valid UpdateUser
-            (updateSuccessE,_,_) <- Client.updateCurrentUser tokenDyn (pure . Namespace <$> updateDyn) updateE
+            (updateSuccessE, _, submittingDyn) <- Client.updateCurrentUser tokenDyn (pure . Namespace <$> updateDyn) updateE
 
             -- Once we have updated successfully, we redirect to the profile page.
             setRoute $

@@ -21,15 +21,17 @@ import           GHCJS.DOM.Document     (createElement)
 import           GHCJS.DOM.Element      (setInnerHTML)
 import           GHCJS.DOM.Types        (liftJSM)
 import qualified Lucid                  as L
-import           Obelisk.Route.Frontend (pattern (:/), R, RouteToUrl, Routed, SetRoute, askRoute, routeLink)
+import           Obelisk.Route.Frontend (pattern (:/), R, RouteToUrl, Routed, SetRoute, askRoute, routeLink, setRoute)
 import qualified Text.MMark             as MMark
 
 
 import qualified Common.Conduit.Api.Articles.Article       as Article
+import qualified Common.Conduit.Api.Articles.Favorite      as Favorite
 import qualified Common.Conduit.Api.Articles.Comment       as Comment
 import qualified Common.Conduit.Api.Articles.CreateComment as CreateComment
 import           Common.Conduit.Api.Namespace              (Namespace (..), unNamespace)
 import qualified Common.Conduit.Api.Profiles.Profile       as Profile
+import qualified Common.Conduit.Api.Profiles.Follow        as Follow
 import qualified Common.Conduit.Api.User.Account           as Account
 import           Common.Route                              (DocumentSlug (..), FrontendRoute (..),
                                                             Username (..))
@@ -37,8 +39,10 @@ import           Frontend.ArticlePreview                   (profileImage, profil
 import qualified Frontend.Conduit.Client                   as Client
 import           Frontend.FrontendStateT
 import           Frontend.Utils                            (buttonClass, routeLinkClass, routeLinkDynClass,
-                                                            showText)
+                                                            showText, modifyFormAttrs)
 import Reflex.Dom (Prerender)
+import qualified Frontend.Conduit.Client as Client
+import           Servant.Common.Req     (QParam (..))
 
 article
   :: forall t m js s
@@ -74,8 +78,9 @@ article = elClass "div" "article-page" $ do
   elClass "div" "container page" $ do
     articleContent articleDyn
     el "hr" blank
-    elClass "div" "row article-actions" $
-      void $ dyn $ maybe blank articleMeta <$> articleDyn
+    -- Removed for better looks
+    -- elClass "div" "row article-actions" $
+    --   void $ dyn $ maybe blank articleMeta <$> articleDyn
     elClass "div" "row" $
       elClass "div" "col-xs-12 col-md-8 offset-md-2" $ do
         -- Do the comments UI below
@@ -87,37 +92,85 @@ articleMeta
      , SetRoute t (R FrontendRoute) m
      , PostBuild t m
      , MonadHold t m
+     , HasLoggedInAccount s
+     , HasFrontendState t s m
      , Prerender js t m
+     , MonadHold t m
+     , MonadFix m
      )
+  -- The article is static, use articleDyn instead?
   => Article.Article
   -> m ()
 articleMeta art = elClass "div" "article-meta" $ do
   let profile = Article.author art
-  let authorRoute = FrontendRoute_Profile :/ (Username "foo", Nothing)
+  let authorRoute = FrontendRoute_Profile :/ (Username (Profile.username profile), Nothing)
   routeLink authorRoute $ profileImage "" (constDyn . Profile.image $ profile)
   elClass "div" "info" $ do
     routeLinkClass "author" authorRoute $ text (Profile.username profile)
     elClass "span" "date" $ text (showText $ Article.createdAt art)
   actions profile
   where
-    actions profile = do
-      -- TODO : Do something with this click
-      _ <- buttonClass "btn btn-sm btn-outline-secondary action-btn" (constDyn False) $ do
+    actions profile = mdo
+      accountDyn <- reviewFrontendState loggedInAccount
+      followE <- buttonClass "btn btn-sm btn-outline-secondary action-btn" (constDyn False) $ do
         elClass "i" "ion-plus-round" blank
-        text " Follow "
-        text (Profile.username profile)
+        dynText $ fmap (\x -> if x then " Following " <> (Profile.username profile) else " Follow " <> (Profile.username profile)) followDyn
         text " ("
         -- TODO : Get this value
         elClass "span" "counter" $ text "0"
         text ")"
-      -- TODO : Do something with this click
       text " "
-      _ <- buttonClass "btn btn-sm btn-outline-primary action-btn" (constDyn False) $ do
+      -- Abit dodgy, can be improved
+      favE <- buttonClass "btn btn-sm btn-outline-primary action-btn" (constDyn False) $ do
         elClass "i" "ion-heart" blank
-        text " Favourite Post ("
-        elClass "span" "counter" $ text $ showText (Article.favoritesCount art)
+        dynText $ fmap (\x -> if x then " Favoring Post" else " Favorite Post" ) favDyn
+        text " ("
+        dynText $ fmap showText favCountDyn
         text ")"
+      favCountDyn <- foldDyn ($) (Article.favoritesCount art :: Integer) (fmap (\x -> if x then (+ 1) else (+ (-1))) (updated favDyn))
+      favDyn <- toggle (Article.favorited art :: Bool) favEE
+      followDyn <- toggle (Profile.following profile :: Bool) followEE
+      (favEE ,_ ,_) <- Client.favorite ((fmap . fmap) Account.token accountDyn) ((Right . Namespace) <$> (Favorite.Favorite <$> (Article.slug <$> constDyn art) <*> favDyn)) favE
+      (followEE ,_ ,_) <- Client.follow ((fmap . fmap) Account.token accountDyn) ((Right . Namespace) <$> (Follow.Follow <$> constDyn (Profile.username profile) <*> followDyn)) followE
+
+      -- Can be done better here?
+      editEE <- dyn $
+        liftA2
+          (\p -> maybe (pure never) editButton
+            . mfilter ((Profile.username p ==). Account.username)
+          ) (constDyn profile) accountDyn
+      switchHold never editEE
+      deleteEE <- dyn $
+        liftA2
+          (\p -> maybe (pure never) deleteButton
+            . mfilter ((Profile.username p ==). Account.username)
+          ) (constDyn profile) accountDyn
+      switchHold never deleteEE
       pure ()
+      where
+        editButton _ = do
+            editClickE <- elClass "button" "btn btn-outline-primary btn-sm" $ do
+              (editElt ,_) <- elClass' "i" "ion-edit" blank
+              pure $ domEvent Click editElt
+            setRoute $
+              (\_ ->
+                FrontendRoute_Editor :/ Just (DocumentSlug $ Article.slug art)
+              ) <$> editClickE
+            pure (void editClickE)
+        deleteButton account = do
+            deleteClickE <- elClass "button" "btn btn-outline-primary btn-sm" $ do
+              (trashElt,_) <- elClass' "i" "ion-trash-a" blank
+              pure $ domEvent Click trashElt
+            (deleteSuccessE,_,_) <- Client.deleteArticle
+              (constDyn . Just . Account.token $ account)
+              (Right . Article.slug <$> constDyn art)
+              deleteClickE
+            setRoute $
+              (\_ ->
+                FrontendRoute_Profile :/ (Username $ Account.username account, Nothing)
+              ) <$> deleteSuccessE
+            pure (void deleteSuccessE)
+
 
 articleContent
   :: forall t m js
@@ -220,18 +273,18 @@ comments slugDyn = mdo
       -- an event when they are successfully added.
       elClass "form" "card comment-form" $ mdo
         commentI <- elClass "div" "card-block" $ do
+          let attrs = Map.fromList [("class","form-control"),("placeholder","Write a comment"),("rows","3")]
+          modifyE <- modifyFormAttrs attrs submittingDyn (constDyn False)
           textAreaElement $ def
-              & textAreaElementConfig_elementConfig.elementConfig_initialAttributes .~ Map.fromList
-                [("class","form-control")
-                ,("placeholder","Write a comment")
-                ,("rows","3")
-                ]
+              & textAreaElementConfig_elementConfig.elementConfig_initialAttributes .~ attrs
               & textAreaElementConfig_setValue .~ ("" <$ submitSuccessE)
+              & textAreaElementConfig_elementConfig.elementConfig_modifyAttributes .~ modifyE
         let createCommentDyn = Right . Namespace <$> CreateComment.CreateComment
               <$> commentI ^. to _textAreaElement_value
         postE <- elClass "div" "card-footer" $ do
+          --  Comment nothing shall be allowed
           buttonClass "btn btn-sm btn-primary" (constDyn False) $ text "Post Comment"
-        (submitSuccessE,_,_) <- Client.createComment
+        (submitSuccessE, _, submittingDyn) <- Client.createComment
           (constDyn . Just $ token)
           (Right . unDocumentSlug <$> slugDyn)
           createCommentDyn postE

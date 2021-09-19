@@ -16,6 +16,7 @@ import Servant.Auth (Auth, JWT)
 
 import Common.Conduit.Api.Articles.Article       as Article (Article (Article))
 import Common.Conduit.Api.Articles.Articles      as Articles (Articles (Articles))
+import Common.Conduit.Api.Articles.Favorite      as Articles (Favorite(..))
 import Common.Conduit.Api.Articles.Attributes    as Attributes (ArticleAttributes (ArticleAttributes), CreateArticle,
                                                   UpdateArticle)
 import Common.Conduit.Api.Articles.Comment       as Comment (Comment (Comment))
@@ -41,8 +42,21 @@ type ArticlesApi token =
   :> QueryParam "limit" Integer
   :> QueryParam "offset" Integer
   :> Get '[JSON] Articles
-  )
-  :<|> ArticleApi token
+  ) :<|> (
+    Auth '[JWT] token
+  :> Capture "slug" Text
+  :> DeleteNoContent '[JSON] NoContent
+  ) :<|> (
+    Auth '[JWT] token
+  :> Capture "slug" Text
+  :> ReqBody '[JSON] (Namespace "article" UpdateArticle)
+  :> Put '[JSON] (Namespace "article" Article)
+  ) :<|> (
+    Auth '[JWT] token
+  :> "favorite"
+  :> ReqBody '[JSON] (Namespace "article" Favorite)
+  :> PostNoContent '[JSON] NoContent
+  ) :<|> ArticleApi token
 
 
 type ArticleApi token = (

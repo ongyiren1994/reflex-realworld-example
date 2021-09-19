@@ -18,12 +18,14 @@ import Servant.Reflex.Multi    (ReqResult (ResponseFailure), reqSuccess)
 
 import           Common.Conduit.Api.Articles.Article       (Article)
 import           Common.Conduit.Api.Articles.Articles      (Articles)
-import           Common.Conduit.Api.Articles.Attributes    (CreateArticle)
+import           Common.Conduit.Api.Articles.Attributes    (CreateArticle, UpdateArticle)
 import           Common.Conduit.Api.Articles.Comment       (Comment)
 import           Common.Conduit.Api.Articles.CreateComment (CreateComment)
+import           Common.Conduit.Api.Articles.Favorite      (Favorite)
 import           Common.Conduit.Api.Errors                 (ErrorBody)
 import           Common.Conduit.Api.Namespace              (Namespace)
 import           Common.Conduit.Api.Profiles               (Profile)
+import           Common.Conduit.Api.Profiles.Follow        (Follow)
 import           Common.Conduit.Api.User.Account           (Account, Token)
 import           Common.Conduit.Api.User.Update            (UpdateUser)
 import           Common.Conduit.Api.Users.Credentials      (Credentials)
@@ -88,8 +90,19 @@ getProfile tokenDyn usernameDyn submitE = fmap switchClientRes $ prerender (pure
   resE <- unIdF $ getClient ^. apiProfiles . profileGet . fillIdF tokenDyn . fillId usernameDyn . fill submitE
   wireClientRes submitE resE
 
--- TODO FollowUser
--- TODO UnFollowUser
+follow
+  :: (Reflex t, Applicative m, Prerender js t m)
+  => Dynamic t (Maybe Token)
+  -> Dynamic t (Either Text (Namespace "profile" Follow))
+  -> Event t ()
+  -> m (ClientRes t NoContent)
+follow tokenDyn followDyn submitE =
+  fmap switchClientRes $ prerender (pure emptyClientRes) $ do
+    resE <- unIdF $ getClient ^. apiProfiles . profileFollow
+      . fillIdF tokenDyn
+      . fillIdF followDyn
+      . fill submitE
+    wireClientRes submitE resE
 
 listArticles
   :: (Reflex t, Applicative m, Prerender js t m)
@@ -149,8 +162,26 @@ createArticle tokenDyn createDyn submitE = fmap switchClientRes $ prerender (pur
   resE <- unIdF $ getClient ^. apiArticles . articlesCreate . fillIdF tokenDyn . fillIdF createDyn . fill submitE
   wireClientRes submitE resE
 
--- TODO Update Article
--- TODO Delete Article
+updateArticle
+  :: (Reflex t, Applicative m, Prerender js t m)
+  => Dynamic t (Maybe Token)
+  -> Dynamic t (Either Text Text)
+  -> Dynamic t (Either Text (Namespace "article" UpdateArticle))
+  -> Event t ()
+  -> m (ClientRes t (Namespace "article" Article))
+updateArticle tokenDyn slugDyn updateDyn submitE = fmap switchClientRes $ prerender (pure emptyClientRes) $ do
+  resE <- unIdF $ getClient ^. apiArticles . articlesUpdate . fillIdF tokenDyn . fillId slugDyn . fillIdF updateDyn . fill submitE
+  wireClientRes submitE resE
+
+deleteArticle
+  :: (Reflex t, Applicative m, Prerender js t m)
+  => Dynamic t (Maybe Token)
+  -> Dynamic t (Either Text Text)
+  -> Event t ()
+  -> m (ClientRes t NoContent )
+deleteArticle tokenDyn slugDyn submitE = fmap switchClientRes $ prerender (pure emptyClientRes) $ do
+  resE <- unIdF $ getClient ^. apiArticles . articlesDelete . fillIdF tokenDyn . fillId slugDyn . fill submitE
+  wireClientRes submitE resE
 
 createComment
   :: (Reflex t, Applicative m, Prerender js t m)
@@ -201,7 +232,19 @@ deleteComment tokenDyn slugDyn commentIdDyn submitE =
       . fill submitE
     wireClientRes submitE resE
 
--- TODO Favorite / Unfavorite
+favorite
+  :: (Reflex t, Applicative m, Prerender js t m)
+  => Dynamic t (Maybe Token)
+  -> Dynamic t (Either Text (Namespace "article" Favorite))
+  -> Event t ()
+  -> m (ClientRes t NoContent)
+favorite tokenDyn slugDyn submitE =
+  fmap switchClientRes $ prerender (pure emptyClientRes) $ do
+    resE <- unIdF $ getClient ^. apiArticles . articlesFavorite
+      . fillIdF tokenDyn
+      . fillIdF slugDyn
+      . fill submitE
+    wireClientRes submitE resE
 
 allTags
   :: (Reflex t, Applicative m, Prerender js t m)

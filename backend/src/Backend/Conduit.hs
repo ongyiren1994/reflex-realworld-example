@@ -42,7 +42,10 @@ import qualified Common.Conduit.Api.Articles.Articles      as ApiArticles
 import qualified Common.Conduit.Api.Articles.Comment       as ApiComment
 import qualified Common.Conduit.Api.Articles.CreateComment as ApiCreateComment
 import qualified Common.Conduit.Api.Profiles.Profile       as ApiProfile
+import qualified Common.Conduit.Api.Profiles.Follow        as ApiFollow
 import qualified Common.Conduit.Api.User.Account           as ApiAccount
+import qualified Common.Conduit.Api.Articles.Favorite      as ApiFavorite
+import qualified Backend.Conduit.Database.Users as DBUser
 
 data ConduitServerEnv = ConduitServerEnv
   { _dbPool      :: Pool Connection
@@ -98,7 +101,7 @@ userServer = currentUserServer :<|> updateUserServer
       userToAccount newUser
 
 articlesServer :: Server (ArticlesApi Claim) ConduitServerContext ConduitServerM
-articlesServer = listArticlesServer :<|> createArticleServer :<|> feedServer :<|> articleServer
+articlesServer = listArticlesServer :<|> createArticleServer :<|> feedServer :<|> deleteArticleServer :<|> updateArticleServer :<|> favoriteArticleServer :<|> articleServer
   where
     listArticlesServer authRes limit offset tags authors favorited = runConduitErrorsT $ do
       runDatabase $ do
@@ -106,7 +109,7 @@ articlesServer = listArticlesServer :<|> createArticleServer :<|> feedServer :<|
         ApiArticles.fromList <$>
           (DBArticles.all
            (primaryKey <$> currUserMay)
-           (fromMaybe 20 limit)
+           (fromMaybe 5 limit)
            (fromMaybe 0 offset)
            (Set.fromList authors)
            (Set.fromList tags)
@@ -118,7 +121,7 @@ articlesServer = listArticlesServer :<|> createArticleServer :<|> feedServer :<|
         ApiArticles.fromList <$>
           (DBArticles.feed
            (primaryKey currUser)
-           (fromMaybe 20 limit)
+           (fromMaybe 5 limit)
            (fromMaybe 0 offset))
 
     createArticleServer authRes (Namespace attrCreate) = runConduitErrorsT $ do
@@ -126,6 +129,34 @@ articlesServer = listArticlesServer :<|> createArticleServer :<|> feedServer :<|
         currUser   <- loadAuthorizedUser authRes
         validAttrs <- withExceptT failedValidation $ DBArticles.validateAttributesForInsert attrCreate
         liftQuery $ Namespace <$> DBArticles.create (primaryKey currUser) validAttrs
+
+    deleteArticleServer authRes slug = runConduitErrorsT $ do
+      runDatabase $ do
+            currUser    <- loadAuthorizedUser authRes
+            articleMay  <- liftQuery $ DBArticles.find (Just $ primaryKey currUser) slug
+            article     <- articleMay ?? notFound ("Article("<> (pack $ show slug) <>")")
+            when (ApiProfile.username (ApiArticle.author article) /= DBUser.username currUser) $
+              throwError forbidden
+            liftQuery $ DBArticles.destroy (DBArticle.ArticleId (ApiArticle.id article))
+            pure NoContent
+
+    updateArticleServer authRes slug (Namespace update) = runConduitErrorsT $ do
+      runDatabase $ do
+        currUser    <- loadAuthorizedUser authRes
+        articleMay  <- liftQuery $ DBArticles.find (Just $ primaryKey currUser) slug
+        article     <- articleMay ?? notFound ("Article("<> (pack $ show slug) <>")")
+        validUpdate <- withExceptT failedValidation $ DBArticles.validateAttributesForUpdate article update
+        liftQuery $ Namespace <$> DBArticles.update (primaryKey currUser) slug validUpdate
+
+    favoriteArticleServer authRes (Namespace favorite) = runConduitErrorsT $ do
+      runDatabase $ do
+        currUser    <- loadAuthorizedUser authRes
+        articleMay  <- liftQuery $ DBArticles.find (Just $ primaryKey currUser) ( ApiFavorite.slug favorite)
+        article      <- articleMay ?? notFound ("Article("<> (pack $ show (ApiFavorite.slug favorite) <>")"))
+        case ApiFavorite.bool favorite of
+          True -> liftQuery $ DBArticles.unfavorite (DBArticle.ArticleId (ApiArticle.id article)) (primaryKey currUser)
+          False -> liftQuery $ DBArticles.favorite (DBArticle.ArticleId (ApiArticle.id article)) (primaryKey currUser)
+        pure NoContent
 
     articleServer authRes slug = getArticleServer :<|> commentsServer
       where
@@ -168,13 +199,22 @@ articlesServer = listArticlesServer :<|> createArticleServer :<|> feedServer :<|
             pure NoContent
 
 profileServer :: Server (ProfilesApi Claim) ConduitServerContext ConduitServerM
-profileServer = profileGetServer
+profileServer = profileGetServer :<|> profileFollowServer
   where
     profileGetServer authRes username = runConduitErrorsT $ do
       runDatabase $ do
         currUserMay <- optionallyLoadAuthorizedUser authRes
         profileMay  <- liftQuery $ DBUsers.findProfile (primaryKey <$> currUserMay) username
         Namespace <$> (profileMay ?? (notFound ("Profile(" <> username <> ")")))
+
+    profileFollowServer authRes (Namespace follow) = runConduitErrorsT $ do
+      runDatabase $ do
+            currUser    <- loadAuthorizedUser authRes
+            profileMay  <- liftQuery $ DBUsers.findProfile (Just $ primaryKey currUser) (ApiFollow.username follow)
+            profile <- profileMay ?? (notFound ("Profile(" <> (ApiFollow.username follow) <> ")"))
+            case ApiFollow.bool follow of
+              True -> liftQuery $ DBUsers.unfollow (primaryKey currUser) (DBUser.UserId (ApiProfile.id profile)) >> pure NoContent
+              False -> liftQuery $ DBUsers.follow (primaryKey currUser) (DBUser.UserId (ApiProfile.id profile)) >> pure NoContent
 
 tagsServer :: Server (TagsApi Claim) ConduitServerContext ConduitServerM
 tagsServer = tagsAllServer
