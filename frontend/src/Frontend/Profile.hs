@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, GADTs, LambdaCase, MultiParamTypeClasses, OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms                                                               #-}
+{-# LANGUAGE PatternSynonyms, RecursiveDo                                                  #-}
 module Frontend.Profile where
 
 import Reflex.Dom.Core
@@ -9,6 +9,7 @@ import Data.Bool              (bool)
 import Data.Functor           (void)
 import Obelisk.Route.Frontend (pattern (:/), R, RouteToUrl, RoutedT, SetRoute, askRoute)
 import Servant.Common.Req     (QParam (QNone))
+import           Servant.Common.Req     (QParam (..))
 
 import           Common.Conduit.Api.Articles.Articles (Articles (..))
 import           Common.Conduit.Api.Namespace         (Namespace(Namespace))
@@ -44,16 +45,16 @@ profile usernameDyn = do
             tokDyn
             (pure . unUsername <$> usernameDyn)
             (leftmost [pbE,void . updated $ usernameDyn])
-
-          void $ widgetHold (text "Loading") $ ffor loadSuccessE $ \(Namespace acct) -> do
+          void $ widgetHold (text "Loading") $ ffor loadSuccessE $ \(Namespace acct) -> mdo
             profileImage "user-img" (constDyn $ Profile.image acct)
             el "h4" $ text $ Profile.username acct
             el "p" $ text $ Profile.bio acct
-            _ <- buttonClass "btn btn-sm btn-outline-secondary action-btn" (constDyn False) $ do
+            followE <- buttonClass "btn btn-sm btn-outline-secondary action-btn" (constDyn False) $ do
               elClass "i" "ion-plus-round" blank
-              text " Follow "
-              text $ Profile.username acct
-            pure ()
+              dynText $ fmap (\x -> if x then " Following " <> (Profile.username acct) else " Follow " <> (Profile.username acct)) followDyn
+            followDyn <- toggle (Profile.following acct :: Bool) followEE
+            (followEE ,_ ,_) <- Client.follow tokDyn (fmap QParamSome (constDyn (Profile.username acct))) (fmap QParamSome followDyn) followE
+            text " "
   elClass "div" "container" $
     elClass "div" "row" $
       elClass "div" "col-xs-12 col-md-10 offset-md-1" $ do
