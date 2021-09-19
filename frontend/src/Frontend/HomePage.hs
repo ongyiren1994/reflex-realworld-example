@@ -22,8 +22,9 @@ import           Frontend.ArticlePreview              (articlesPreview)
 import qualified Frontend.Conduit.Client              as Client
 import           Frontend.FrontendStateT
 import           Frontend.Utils                       (buttonClass, buttonDynClass)
+-- import Control.Applicative (liftA2)
 
-data HomePageSelected = GlobalSelected | FeedSelected | TagSelected Text deriving Show
+data HomePageSelected = GlobalSelected | FeedSelected | TagSelected Text deriving (Show, Eq)
 makePrisms ''HomePageSelected
 
 homePage
@@ -55,13 +56,13 @@ homePage = elClass "div" "home-page" $ mdo
       FeedSelected -> Client.feed
         tokDyn
         (constDyn QNone)
-        (fmap (QParamSome . (*) 20) pageNum)
+        (fmap (QParamSome . (*) 5) pageNum)
         newSelection
 
       GlobalSelected -> Client.listArticles
         tokDyn
         (constDyn QNone)
-        (fmap (QParamSome . (*) 20) pageNum)
+        (fmap (QParamSome . (*) 5) pageNum)
         (constDyn [])
         (constDyn [])
         (constDyn [])
@@ -70,7 +71,7 @@ homePage = elClass "div" "home-page" $ mdo
       TagSelected t -> Client.listArticles
         tokDyn
         (constDyn QNone)
-        (fmap (QParamSome . (*) 20) pageNum)
+        (fmap (QParamSome . (*) 5) pageNum)
         (constDyn [t])
         (constDyn [])
         (constDyn [])
@@ -81,6 +82,10 @@ homePage = elClass "div" "home-page" $ mdo
 
   artsDyn <- holdDyn (Articles [] 0) loadArtsE
   tagsDyn <- holdDyn (Namespace []) loadTagsE
+
+  -- let oldSelectedDyn = tag (current selectedDyn) (updated selectedDyn)
+  -- valueDyn <-  holdDyn GlobalSelected oldSelectedDyn
+  -- let isSelectedFDyn = ffilter not $ updated $ liftA2 (==) valueDyn selectedDyn
 
   elClass "div" "banner" $
     elClass "div" "container" $ do
@@ -115,13 +120,17 @@ homePage = elClass "div" "home-page" $ mdo
           void $ simpleList (unNamespace <$> tagsDyn) tagPill
 
   let articleCount = fmap articlesCount artsDyn
-  let isLastPageDyn = fmap (< 20) articleCount
+  -- It appears that when the articlesCount is the exact multiple of per page count, user can access the last empty page
+  let isLastPageDyn = fmap (< 5) articleCount
   let isFirstPageDyn = fmap (<= 0) pageNum
   pageNum <- elClass "div" "container" $ mdo
       decI <- buttonClass "btn btn-sm btn-outline-secondary action-btn" isFirstPageDyn $ do
         elClass "i" "ion-arrow-left-b" blank
       -- UI to be improved.Create an event which only triggers (to reset to first page) when not first page and have 0 articleCount
       pageNum <- foldDyn ($) (0 :: Integer)  $ leftmost [(+) 1 <$ incI, (+ (-1)) <$ decI]
+      -- Why can't this work?
+      -- pageNum <- foldDyn ($) (0 :: Integer)  $ leftmost [(+) 1 <$ incI, (+ (-1)) <$ decI, (const 0) <$ isSelectedFDyn ]
+      --  (const 0) <$ isSelectedFDyn,
       el "span" $ display $ fmap (1 +) pageNum
       incI <- buttonClass "btn btn-sm btn-outline-secondary action-btn" isLastPageDyn $ do
         elClass "i" "ion-arrow-right-b" blank

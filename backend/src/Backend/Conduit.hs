@@ -109,7 +109,7 @@ articlesServer = listArticlesServer :<|> createArticleServer :<|> feedServer :<|
         ApiArticles.fromList <$>
           (DBArticles.all
            (primaryKey <$> currUserMay)
-           (fromMaybe 20 limit)
+           (fromMaybe 5 limit)
            (fromMaybe 0 offset)
            (Set.fromList authors)
            (Set.fromList tags)
@@ -121,7 +121,7 @@ articlesServer = listArticlesServer :<|> createArticleServer :<|> feedServer :<|
         ApiArticles.fromList <$>
           (DBArticles.feed
            (primaryKey currUser)
-           (fromMaybe 20 limit)
+           (fromMaybe 5 limit)
            (fromMaybe 0 offset))
 
     createArticleServer authRes (Namespace attrCreate) = runConduitErrorsT $ do

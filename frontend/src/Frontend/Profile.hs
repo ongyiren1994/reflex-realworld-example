@@ -12,6 +12,7 @@ import Servant.Common.Req     (QParam (QNone))
 import           Servant.Common.Req     (QParam (..))
 
 import           Common.Conduit.Api.Articles.Articles (Articles (..))
+import           Common.Conduit.Api.Articles.Article
 import           Common.Conduit.Api.Namespace         (Namespace(Namespace))
 import qualified Common.Conduit.Api.Profiles.Profile  as Profile
 import qualified Common.Conduit.Api.Profiles.Follow  as Follow
@@ -59,24 +60,48 @@ profile usernameDyn = do
   elClass "div" "container" $
     elClass "div" "row" $
       elClass "div" "col-xs-12 col-md-10 offset-md-1" $ do
-        elClass "div" "articles-toggle" $ do
-          elClass "ul" "nav nav-pills outline-active" $ do
+        elClass "div" "articles-toggle" $ mdo
+          rDyn <- elClass "ul" "nav nav-pills outline-active" $ do
             rDyn <- askRoute
             navItem Nothing rDyn $ text "My Articles"
             navItem (Just $ ProfileRoute_Favourites :/ ()) rDyn $ text "My Favourites"
+            pure rDyn
 
           (loadArtsSuccessE,_,artsLoadingDyn) <- Client.listArticles
             tokDyn
             (constDyn QNone)
-            (constDyn QNone)
+            (fmap (QParamSome . (*) 5) pageNum)
             (constDyn [])
             (pure . unUsername <$> usernameDyn)
             (constDyn [])
-            (leftmost [pbE,void $ updated tokDyn])
+            (leftmost [pbE,void $ updated tokDyn, () <$ updated pageNum])
 
           artsDyn <- holdDyn (Articles [] 0) loadArtsSuccessE
-          articlesPreview artsLoadingDyn artsDyn
+          -- For Favorite tabs, basically we only show posts which are favorited by at least one person
+          articlesPreview artsLoadingDyn (displayArticles <$> rDyn <*> artsDyn)
+
+          let articleCount = fmap articlesCount (displayArticles <$> rDyn <*> artsDyn)
+          let isLastPageDyn = fmap (< 5) articleCount
+          let isFirstPageDyn = fmap (<= 0) pageNum
+          pageNum <- elClass "div" "container" $ mdo
+              decI <- buttonClass "btn btn-sm btn-outline-secondary action-btn" isFirstPageDyn $ do
+                elClass "i" "ion-arrow-left-b" blank
+              pageNum <- foldDyn ($) (0 :: Integer)  $ leftmost [(+) 1 <$ incI, (+ (-1)) <$ decI]
+              el "span" $ display $ fmap (1 +) pageNum
+              incI <- buttonClass "btn btn-sm btn-outline-secondary action-btn" isLastPageDyn $ do
+                elClass "i" "ion-arrow-right-b" blank
+              pure pageNum
+          pure ()
   where
     navItem sr rDyn = elClass "li" "nav-item" . routeLinkDynClass
-      (("nav-link " <>) . bool "" " active" . (== sr) <$> rDyn)
+       (("nav-link " <>) . bool "" " active" . (== sr) <$> rDyn)
       ((\u -> FrontendRoute_Profile :/ (u,sr)) <$> usernameDyn)
+    -- Can be written nicer here?
+    -- Why must put type signature?
+    displayArticles :: Maybe (R ProfileRoute) -> Articles -> Articles
+    displayArticles sr = case sr of
+                            Nothing -> (\x -> x)
+                            Just (ProfileRoute_Favourites :/ ()) -> onlyFavoritePost
+    onlyFavoritePost art = do
+      let articles' = filter favorited (articles art)
+      Articles  { articles = articles' , articlesCount = toInteger (length articles')}

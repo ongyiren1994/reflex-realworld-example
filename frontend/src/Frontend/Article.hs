@@ -103,7 +103,7 @@ articleMeta
   -> m ()
 articleMeta art = elClass "div" "article-meta" $ do
   let profile = Article.author art
-  let authorRoute = FrontendRoute_Profile :/ (Username "foo", Nothing)
+  let authorRoute = FrontendRoute_Profile :/ (Username (Profile.username profile), Nothing)
   routeLink authorRoute $ profileImage "" (constDyn . Profile.image $ profile)
   elClass "div" "info" $ do
     routeLinkClass "author" authorRoute $ text (Profile.username profile)
